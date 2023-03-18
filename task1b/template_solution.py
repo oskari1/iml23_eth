@@ -4,6 +4,25 @@
 import numpy as np
 import pandas as pd
 
+# ADDED
+def transform_row(x):
+    """
+    Parameters
+    ----------
+    x: array of floats, dim = (1,5)
+
+    Returns
+    ----------
+    x_transformed: array of floats, dim = (1, 21)
+    """
+    x_transformed = np.zeros((1, 21))
+    x_transformed[0,0:5] = x
+    x_transformed[0,5:10] = x*x
+    x_transformed[0,10:15] = np.exp(x)
+    x_transformed[0,15:20] = np.cos(x)
+    x_transformed[0,20] = 1
+    return x_transformed
+# END
 
 def transform_data(X):
     """
@@ -25,6 +44,8 @@ def transform_data(X):
     """
     X_transformed = np.zeros((700, 21))
     # TODO: Enter your code here
+    X_transformed = (np.apply_along_axis(transform_row, 1, X)).reshape((700,21))
+    # END
     assert X_transformed.shape == (700, 21)
     return X_transformed
 
