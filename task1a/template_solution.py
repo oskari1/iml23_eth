@@ -27,7 +27,8 @@ def fit(X, y, lam):
     """
     w = np.zeros((13,))
     # TODO: Enter your code here
-    model = Ridge(alpha=lam, solver="svd", fit_intercept=False)
+    #model = Ridge(alpha=lam, solver="svd", fit_intercept=False)
+    model = Ridge(alpha=lam, fit_intercept=False)
     w = model.fit(X,y).coef_
     # END
     assert w.shape == (13,)
@@ -78,7 +79,6 @@ def average_LR_RMSE(X, y, lambdas, n_folds):
     # TODO: Enter your code here. Hint: Use functions 'fit' and 'calculate_RMSE' with training and test data
     # and fill all entries in the matrix 'RMSE_mat'
     kf = KFold(n_splits=10)
-    #i, j = 0,0
     for j, lam in enumerate(lambdas):
         i = 0
         for i, (train, test) in enumerate(kf.split(X)):
@@ -88,8 +88,6 @@ def average_LR_RMSE(X, y, lambdas, n_folds):
             y_test = y[test]
             w_opt = fit(X_train, y_train, lam)
             RMSE_mat[i,j] = calculate_RMSE(w_opt, X_test,y_test)
-            #i+=1 
-        #j+=1
     # END
 
     avg_RMSE = np.mean(RMSE_mat, axis=0)
