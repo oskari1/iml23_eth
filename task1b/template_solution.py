@@ -1,6 +1,7 @@
 # This serves as a template which will guide you through the implementation of this task.  It is advised
 # to first read the whole template and get a sense of the overall structure of the code before trying to fill in any of the TODO gaps
 # First, we import necessary libraries:
+from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 # ADDED
@@ -84,6 +85,13 @@ def fit(X, y):
     best_lam = lambdas[mean_scores.index(min(mean_scores))]
     best_model = Ridge(alpha=best_lam, fit_intercept=False) # maybe use fit_intercept = False, maybe use Lasso
     w = best_model.fit(X_transformed, y).coef_
+
+    # plot lambda vs mean_score
+    print(best_lam) 
+    plt.plot(lambdas, mean_scores)
+    plt.xlabel("lambda")
+    plt.ylabel("mean_cross_val_score")
+    plt.show()
 
     # END
     assert w.shape == (21,)
