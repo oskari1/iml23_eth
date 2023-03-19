@@ -3,8 +3,11 @@
 # First, we import necessary libraries:
 import numpy as np
 import pandas as pd
-
 # ADDED
+#from sklearn.model_selection import KFold
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import cross_val_score
+
 def transform_row(x):
     """
     Parameters
@@ -67,6 +70,22 @@ def fit(X, y):
     w = np.zeros((21,))
     X_transformed = transform_data(X)
     # TODO: Enter your code here
+
+    # chosen parameters
+    lambdas = [i/10 for i in range (1,1000)] 
+    k = 5 # maybe try out different k
+
+    mean_scores = list(lambdas) 
+    for i, lam in enumerate(lambdas):
+        model = Ridge(alpha=lam) # maybe use fit_intercept = False, maybe use Lasso
+        scores = cross_val_score(model, X_transformed, y, scoring="neg_mean_squared_error", cv=k)
+        mean_scores[i] = scores.mean()
+
+    best_lam = lambdas[mean_scores.index(min(mean_scores))]
+    best_model = Ridge(alpha=best_lam) # maybe use fit_intercept = False, maybe use Lasso
+    w = best_model.fit(X_transformed, y).coef_
+
+    # END
     assert w.shape == (21,)
     return w
 

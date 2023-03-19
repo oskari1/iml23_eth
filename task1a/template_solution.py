@@ -8,7 +8,6 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error 
 from sklearn.linear_model import Ridge
 
-
 def fit(X, y, lam):
     """
     This function receives training data points, then fits the ridge regression on this data
