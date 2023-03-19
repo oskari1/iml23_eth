@@ -77,12 +77,12 @@ def fit(X, y):
 
     mean_scores = list(lambdas) 
     for i, lam in enumerate(lambdas):
-        model = Ridge(alpha=lam) # maybe use fit_intercept = False, maybe use Lasso
+        model = Ridge(alpha=lam, fit_intercept=False) # maybe use fit_intercept = False, maybe use Lasso
         scores = cross_val_score(model, X_transformed, y, scoring="neg_mean_squared_error", cv=k)
         mean_scores[i] = scores.mean()
 
     best_lam = lambdas[mean_scores.index(min(mean_scores))]
-    best_model = Ridge(alpha=best_lam) # maybe use fit_intercept = False, maybe use Lasso
+    best_model = Ridge(alpha=best_lam, fit_intercept=False) # maybe use fit_intercept = False, maybe use Lasso
     w = best_model.fit(X_transformed, y).coef_
 
     # END
