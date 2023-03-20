@@ -74,7 +74,8 @@ def fit(X, y):
 
     # chosen parameters
     lambdas = [i/10 for i in range (1,1000)] 
-    k = 5 # maybe try out different k
+    #k = 5 # maybe try out different k
+    k = 10 # maybe try out different k
 
     mean_scores = list(lambdas) 
     for i, lam in enumerate(lambdas):
