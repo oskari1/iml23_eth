@@ -73,20 +73,20 @@ def fit(X, y):
     # TODO: Enter your code here
 
     # chosen parameters
-    lambdas = [i/10 for i in range (1,1000)] 
-    #k = 5 # maybe try out different k
-    #k = 10 # maybe try out different k
-    k = 10 # maybe try out different k
+    lambdas = [i/10 for i in range (1,1000)] # best so far range (1, 1000)
+    k = 10 # best so far 10
 
     mean_scores = list(lambdas) 
+    max_iter = 1000 # best so far 10000
+    epsilon = 1
     for i, lam in enumerate(lambdas):
-        model = HuberRegressor(alpha=lam, fit_intercept=False, max_iter = 10000, epsilon=1) # maybe use fit_intercept = False, maybe use Lasso
+        model = HuberRegressor(alpha=lam, fit_intercept=False, max_iter = max_iter, epsilon=epsilon) # maybe use fit_intercept = False, maybe use Lasso
         scores = cross_val_score(model, X_transformed, y, scoring="neg_mean_squared_error", cv=k)
         mean_scores[i] = scores.mean()
 
     #best_lam = lambdas[mean_scores.index(min(mean_scores))]
     best_lam = lambdas[mean_scores.index(max(mean_scores))]
-    best_model = HuberRegressor(alpha=best_lam, fit_intercept=False, max_iter = 10000, epsilon=1) # maybe use fit_intercept = False, maybe use Lasso
+    best_model = HuberRegressor(alpha=best_lam, fit_intercept=False, max_iter = max_iter, epsilon=epsilon) # maybe use fit_intercept = False, maybe use Lasso
     w = best_model.fit(X_transformed, y).coef_
 
     # plot lambda vs mean_score
