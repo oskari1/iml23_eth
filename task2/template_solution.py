@@ -3,6 +3,8 @@
 # First, we import necessary libraries:
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 def data_loading():
     """
@@ -67,6 +69,7 @@ def modeling_and_prediction(X_train, y_train, X_test):
 if __name__ == "__main__":
     # Data loading
     X_train, y_train, X_test = data_loading()
+    train_df = pd.read_csv("train.csv")
     # The function retrieving optimal LR parameters
     y_pred=modeling_and_prediction(X_train, y_train, X_test)
     # Save results in the required format
