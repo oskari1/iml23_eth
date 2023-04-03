@@ -6,6 +6,19 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+def encode_season_column(X):
+    """ encode season-column as {winter -> 0, spring -> 1, summer -> 2, autumn -> 3} """
+    season_col = X[:,0]
+    encode_season = lambda season: ( 
+        0 if season == "winter" else (
+        1 if season == "spring" else (
+        2 if season == "summer" else (
+        3
+        ))))
+    encoded_seasons = np.array(list(map(encode_season, season_col)))
+    X[:,0] = encoded_seasons
+    return X
+
 def data_imputation(df):
     """ 
     Perform data imputation by taking average between last and next non-null value.
@@ -116,6 +129,10 @@ def data_loading():
     X_train = train_df.drop(['price_CHF'], axis=1).to_numpy()
     y_train = train_df['price_CHF'].to_numpy()
     X_test = test_df.to_numpy()
+
+    # encode season-column
+    X_train = encode_season_column(X_train)
+    X_test = encode_season_column(X_test)
 
     # sanity check of dimensions
     assert (old_X_test_shape == X_test.shape) and (old_X_train_shape == X_train.shape) and (old_y_train_shape == y_train.shape)
