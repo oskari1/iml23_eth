@@ -9,11 +9,17 @@ import matplotlib.pyplot as plt
 def data_imputation(df):
     """ 
     Perform data imputation by taking average between last and next non-null value.
-
-    Given: dataframe which still includes the season-column
-    Outputs: dataframe where each null-value is replaced by the average of the previous and next non-null values of that column.
-             If there is no previous non-null value in that column, it is replaced by the first non-null value of that column.
-             If there there is no next non-null value in that column, it is replaced by the last non-null value of that column.
+    
+    Parameters
+    ----------
+    df: pd.DataFrame where first column is the season-column with strings and the other ones contain prices (floats) per season
+    ----------
+    Returns
+    ----------
+    df: pd.DataFrame where each null-value is replaced by the average of the previous and next non-null values of that column.
+        If there is no previous non-null value in that column, it is replaced by the first non-null value of that column.
+        If there there is no next non-null value in that column, it is replaced by the last non-null value of that column.
+        output df has same dimensions as input df
     """
     cols = df.columns[1:].to_list()
     first_vals = list(cols) 
@@ -108,11 +114,10 @@ def data_loading():
     y_train = train_df['price_CHF'].to_numpy()
     X_test = test_df.to_numpy()
 
-    # sanity check the dimensions
+    # sanity check of dimensions
     assert (old_X_test_shape == X_test.shape) and (old_X_train_shape == X_train.shape) and (old_y_train_shape == y_train.shape)
     assert (old_train_df_shape == train_df.shape) and (old_test_df_shape == test_df.shape)
 
-    # Load test data
     assert (X_train.shape[1] == X_test.shape[1]) and (X_train.shape[0] == y_train.shape[0]) and (X_test.shape[0] == 100), "Invalid data shape"
     return X_train, y_train, X_test
 
