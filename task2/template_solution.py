@@ -6,6 +6,57 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+def data_imputation(df):
+    """ 
+    Perform data imputation by taking average between last and next non-null value.
+
+    Given: dataframe which still includes the season-column
+    Outputs: dataframe where each null-value is replaced by the average of the previous and next non-null values of that column.
+             If there is no previous non-null value in that column, it is replaced by the first non-null value of that column.
+             If there there is no next non-null value in that column, it is replaced by the last non-null value of that column.
+    """
+    cols = df.columns[1:].to_list()
+    first_vals = list(cols) 
+    last_vals = list(cols)
+    # build maps which map each column to the first/last non-null value in that column
+    for i, col in enumerate(df.columns[1:]):
+        col_series = df[col].dropna()
+        first_vals[i] = col_series.to_list()[0]
+        last_vals[i] = col_series.to_list()[-1]
+
+    first_val_of_col = dict(zip(cols, first_vals))
+    last_val_of_col = dict(zip(cols, last_vals))
+
+    # iterate through each column filling in missing values by the average of the previous and next non-null value 
+    for col in df.columns[1:]:
+        is_nan = df[col].isna() 
+        # forward-pass by inserting previous non-null value into NaN cells (needed to take average in backward-pass)
+        prev_val = first_val_of_col[col]
+        for i, _ in enumerate(df[col]):
+            if(is_nan[i]):
+                df.at[i, col] = prev_val
+            else:
+                prev_val = df.at[i, col]  
+        # backward-pass by finding next non-null value and taking average of last and next non-null value
+        len = df[col].size 
+        next_val = last_val_of_col[col]
+        for i, _ in enumerate(df[col]):
+            j = len - 1 - i
+            if(is_nan[j]):
+                df.at[j, col] = np.average([df.at[j,col], next_val]) 
+            else:
+                next_val = df.at[j,col]
+
+    #plt.figure(figsize=(20,6))
+    #column = 'price_CHF'
+    #sns.lineplot(data=df[column], color='r', label="imputed data")
+    #sns.lineplot(data=df_old[column], color='b', label="original data")
+    #sns.scatterplot(x=df_old.index, y=df_old['price_POL'], color='b')
+    #sns.scatterplot(x=df.index, y=df['price_POL'], color='r')
+    #plt.show()
+    return df
+ 
+
 def data_loading():
     """
     This function loads the training and test data, preprocesses it, removes the NaN values and interpolates the missing 
@@ -24,7 +75,7 @@ def data_loading():
     
     print("Training data:")
     print("Shape:", train_df.shape)
-    print(train_df.head(2))
+    print(train_df.head(3))
     print('\n')
     
     # Load test data
@@ -32,7 +83,7 @@ def data_loading():
 
     print("Test data:")
     print(test_df.shape)
-    print(test_df.head(2))
+    print(test_df.head(3))
 
     # Dummy initialization of the X_train, X_test and y_train   
     X_train = np.zeros_like(train_df.drop(['price_CHF'],axis=1))
@@ -41,6 +92,27 @@ def data_loading():
 
     # TODO: Perform data preprocessing, imputation and extract X_train, y_train and X_test
 
+    # perform data imputation 
+    old_train_df_shape = train_df.shape
+    old_test_df_shape = test_df.shape
+
+    train_df = data_imputation(train_df)
+    test_df = data_imputation(test_df)
+
+    old_X_train_shape = X_train.shape
+    old_y_train_shape = y_train.shape
+    old_X_test_shape = X_test.shape
+
+    # extract X_train, y_train
+    X_train = train_df.drop(['price_CHF'], axis=1).to_numpy()
+    y_train = train_df['price_CHF'].to_numpy()
+    X_test = test_df.to_numpy()
+
+    # sanity check the dimensions
+    assert (old_X_test_shape == X_test.shape) and (old_X_train_shape == X_train.shape) and (old_y_train_shape == y_train.shape)
+    assert (old_train_df_shape == train_df.shape) and (old_test_df_shape == test_df.shape)
+
+    # Load test data
     assert (X_train.shape[1] == X_test.shape[1]) and (X_train.shape[0] == y_train.shape[0]) and (X_test.shape[0] == 100), "Invalid data shape"
     return X_train, y_train, X_test
 
@@ -69,7 +141,6 @@ def modeling_and_prediction(X_train, y_train, X_test):
 if __name__ == "__main__":
     # Data loading
     X_train, y_train, X_test = data_loading()
-    train_df = pd.read_csv("train.csv")
     # The function retrieving optimal LR parameters
     y_pred=modeling_and_prediction(X_train, y_train, X_test)
     # Save results in the required format
