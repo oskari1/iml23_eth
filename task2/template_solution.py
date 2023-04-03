@@ -60,6 +60,9 @@ def data_imputation(df):
     #sns.scatterplot(x=df_old.index, y=df_old['price_POL'], color='b')
     #sns.scatterplot(x=df.index, y=df['price_POL'], color='r')
     #plt.show()
+
+    # Check that all NaN entries are removed 
+    assert df.dropna().shape == df.shape
     return df
  
 
