@@ -5,9 +5,17 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import DotProduct, RBF, Matern, RationalQuadratic, ExpSineSquared
+from sklearn.model_selection import cross_val_score
+
+def create_time_line_column(X):
+    _, rows = X.shape
+    X[:,0] = np.linspace(1, rows, rows)
+    return X
 
 def encode_season_column(X):
-    """ encode season-column as {winter -> 0, spring -> 1, summer -> 2, autumn -> 3} """
+    """ encode seasons as {winter -> 0, spring -> 1, summer -> 2, autumn -> 3} """
     season_col = X[:,0]
     encode_season = lambda season: ( 
         0 if season == "winter" else (
@@ -158,6 +166,23 @@ def modeling_and_prediction(X_train, y_train, X_test):
 
     y_pred=np.zeros(X_test.shape[0])
     #TODO: Define the model and fit it using training data. Then, use test data to make predictions
+
+    ls_list = [1e-3, 1e-2, 1e-1, 1, 1e1, 1e2, 1e3]
+    k = 10 
+    mean_scores = list(ls_list)
+
+    for i, ls in enumerate(ls_list):
+        print("Using length_scale = {}".format(ls))
+        kernel = RBF(length_scale=ls)
+        gpr = GaussianProcessRegressor(kernel=kernel, random_state=0) 
+        scores = cross_val_score(gpr, X_train, y_train, cv=k)
+        mean_scores[i] = scores.mean()
+        print("\n")
+
+    best_ls = ls_list[mean_scores.index(max(mean_scores))]
+    gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls), random_state=0).fit(X_train, y_train)
+    y_pred = gpr.predict(X_test)
+
 
     assert y_pred.shape == (100,), "Invalid data shape"
     return y_pred
