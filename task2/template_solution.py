@@ -180,6 +180,7 @@ def modeling_and_prediction(X_train, y_train, X_test):
         print("\n")
 
     best_ls = ls_list[mean_scores.index(max(mean_scores))]
+    print("best length_scale = {}".format(best_ls))
     gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls), random_state=0).fit(X_train, y_train)
     y_pred = gpr.predict(X_test)
 
