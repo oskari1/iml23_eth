@@ -201,7 +201,7 @@ def modeling_and_prediction(X_train, y_train, X_test):
 
     for i, ls in enumerate(ls_list):
         print("Using length_scale = {}".format(ls))
-        #ls = np.full((10,), ls)
+        ls = np.full((10,), ls)
         kernel = RBF(length_scale=ls)
         gpr = GaussianProcessRegressor(kernel=kernel, random_state=0) 
         scores = cross_val_score(gpr, X_train, y_train, cv=k)
@@ -210,7 +210,7 @@ def modeling_and_prediction(X_train, y_train, X_test):
 
     best_ls = ls_list[mean_scores.index(max(mean_scores))]
     print("best length_scale = {}".format(best_ls))
-    #best_ls_arr = np.full((10,), best_ls)
+    best_ls_arr = np.full((10,), best_ls)
     gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls), random_state=0).fit(X_train, y_train)
     y_pred_scaled = gpr.predict(X_test)
     # need to rescale since the Gaussian regressor is dealing with standardized data (zero mean, unit variance)
