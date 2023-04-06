@@ -6,8 +6,12 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import DotProduct, RBF, Matern, RationalQuadratic, ExpSineSquared
+from sklearn.gaussian_process.kernels import DotProduct, RBF, Matern, RationalQuadratic, ExpSineSquared, WhiteKernel
 from sklearn.model_selection import cross_val_score
+from sklearn import preprocessing
+
+input_scaler = 0
+output_scaler = 0
 
 def create_time_line_column(X):
     _, rows = X.shape
@@ -89,8 +93,8 @@ def data_imputation(df):
 
 def data_loading():
     """
-    This function loads the training and test data, preprocesses it, removes the NaN values and interpolates the missing 
-    data using imputation
+    This function loads the training and test data, replaces the NaNs by interpolated values (see data_imputation),
+    encodes the seasons to integers and normalizes the data (recommended for Gaussian Process).
 
     Parameters
     ----------
@@ -129,6 +133,19 @@ def data_loading():
     train_df = data_imputation(train_df)
     test_df = data_imputation(test_df)
 
+    # plot price_CHF vs price_GER 
+    #sns.scatterplot(x=df.index, y=df['price_POL'], color='r')
+    #sns.scatterplot(x=train_df['price_GER'], y=train_df['price_CHF'], color='b')
+    #plt.show()
+    # normalize the data first
+    #train_arr = train_df[["price_CHF", "price_GER"]].to_numpy()
+    #scaler = preprocessing.StandardScaler().fit(train_arr)
+    #train_arr_scaled = scaler.transform(train_arr)
+    #train_df_scaled = pd.DataFrame({'price_GER':train_arr_scaled[:,1], 'price_CHF':train_arr_scaled[:,0]})
+    #sns.scatterplot(x=train_df_scaled['price_GER'].head(100), y=train_df_scaled['price_CHF'].head(100), color='b')
+    #sns.scatterplot(x=train_df_scaled['price_GER'], y=train_df_scaled['price_CHF'], color='b')
+    #plt.show()
+
     old_X_train_shape = X_train.shape
     old_y_train_shape = y_train.shape
     old_X_test_shape = X_test.shape
@@ -141,6 +158,17 @@ def data_loading():
     # encode season-column
     X_train = encode_season_column(X_train)
     X_test = encode_season_column(X_test)
+
+    # normalize the data (recommended for Gaussian processes)
+    global input_scaler 
+    input_scaler = preprocessing.StandardScaler().fit(X_train)
+    X_train = input_scaler.transform(X_train)
+    X_test = input_scaler.transform(X_test)
+    rows, _ = X_train.shape
+    y_train_reshaped = y_train.reshape((rows, 1))
+    global output_scaler 
+    output_scaler = preprocessing.StandardScaler().fit(y_train_reshaped) 
+    y_train = output_scaler.transform(y_train_reshaped).reshape(old_y_train_shape)
 
     # sanity check of dimensions
     assert (old_X_test_shape == X_test.shape) and (old_X_train_shape == X_train.shape) and (old_y_train_shape == y_train.shape)
@@ -167,23 +195,28 @@ def modeling_and_prediction(X_train, y_train, X_test):
     y_pred=np.zeros(X_test.shape[0])
     #TODO: Define the model and fit it using training data. Then, use test data to make predictions
 
-    ls_list = [1e-3, 1e-2, 1e-1, 1, 1e1, 1e2, 1e3]
+    ls_list = [1e-4, 1e-3, 1e-2, 1e-1]
     k = 10 
     mean_scores = list(ls_list)
 
     for i, ls in enumerate(ls_list):
         print("Using length_scale = {}".format(ls))
+        #ls = np.full((10,), ls)
         kernel = RBF(length_scale=ls)
         gpr = GaussianProcessRegressor(kernel=kernel, random_state=0) 
         scores = cross_val_score(gpr, X_train, y_train, cv=k)
         mean_scores[i] = scores.mean()
-        print("\n")
+        print("Got mean score of {} for length_scale = {}".format(mean_scores[i], ls))
 
     best_ls = ls_list[mean_scores.index(max(mean_scores))]
     print("best length_scale = {}".format(best_ls))
+    #best_ls_arr = np.full((10,), best_ls)
     gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls), random_state=0).fit(X_train, y_train)
-    y_pred = gpr.predict(X_test)
-
+    y_pred_scaled = gpr.predict(X_test)
+    # need to rescale since the Gaussian regressor is dealing with standardized data (zero mean, unit variance)
+    rows, _ = X_test.shape
+    y_pred = output_scaler.inverse_transform(y_pred_scaled.reshape((rows,1))) 
+    y_pred = y_pred.reshape(y_pred_scaled.shape)
 
     assert y_pred.shape == (100,), "Invalid data shape"
     return y_pred
