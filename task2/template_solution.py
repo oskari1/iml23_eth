@@ -195,23 +195,25 @@ def modeling_and_prediction(X_train, y_train, X_test):
     y_pred=np.zeros(X_test.shape[0])
     #TODO: Define the model and fit it using training data. Then, use test data to make predictions
 
-    ls_list = [1e-4, 1e-3, 1e-2, 1e-1]
+    #ls_list = [1e-4, 1e-3, 1e-2, 1e-1]
+    noise_list = [1e-4, 1e-3, 1e-2, 1e-1, 1]
+    ls = np.full((10,), 1e-1) # best length_scale found empirically (only one that converges)
     k = 10 
-    mean_scores = list(ls_list)
+    mean_scores = list(noise_list)
 
-    for i, ls in enumerate(ls_list):
-        print("Using length_scale = {}".format(ls))
-        ls = np.full((10,), ls)
-        kernel = RBF(length_scale=ls) + WhiteKernel(1e-1)
+    for i, ns in enumerate(noise_list):
+        #print("Using length_scale = {}".format(ls))
+        print("Using noise = {}".format(ns))
+        kernel = RBF(length_scale=ls) + WhiteKernel(ns)
         gpr = GaussianProcessRegressor(kernel=kernel, random_state=0) 
         scores = cross_val_score(gpr, X_train, y_train, cv=k)
         mean_scores[i] = scores.mean()
-        print("Got mean score of {} for length_scale = {}".format(mean_scores[i], ls))
+        #print("Got mean score of {} for length_scale = {}".format(mean_scores[i], ls))
+        print("Got mean score of {} for noise = {}".format(mean_scores[i], ns))
 
-    best_ls = ls_list[mean_scores.index(max(mean_scores))]
-    print("best length_scale = {}".format(best_ls))
-    best_ls_arr = np.full((10,), best_ls)
-    gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls) + WhiteKernel(1e-1), random_state=0).fit(X_train, y_train)
+    best_ns = noise_list[mean_scores.index(max(mean_scores))]
+    print("best noise = {}".format(best_ns))
+    gpr = GaussianProcessRegressor(kernel=RBF(length_scale=ls) + WhiteKernel(best_ns), random_state=0).fit(X_train, y_train)
     y_pred_scaled = gpr.predict(X_test)
     # need to rescale since the Gaussian regressor is dealing with standardized data (zero mean, unit variance)
     rows, _ = X_test.shape
