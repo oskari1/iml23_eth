@@ -199,7 +199,168 @@ class Net(nn.Module):
         x = self.out(x)
         return x
 
-def train_model(train_loader):
+class WideNet(nn.Module):
+    """
+    The model class, which defines our classifier.
+    """
+    def __init__(self):
+        """
+        The constructor of the model.
+        """
+        super().__init__()
+        # self.fc = nn.Linear(3000, 1)
+
+        self.fc1 = nn.Linear(embedding_size_global*3, 1000)
+        self.out = nn.Linear(1000, 1) #times 3 because three images are given as input
+        
+
+    def forward(self, x):
+        """
+        The forward pass of the model.
+
+        input: x: torch.Tensor, the input to the model
+
+        output: x: torch.Tensor, the output of the model
+        """
+        x = F.normalize(x, p=2, dim=1)
+        x = F.relu(self.fc1(x))
+        x = self.out(x)
+        return x
+
+class DeepNet(nn.Module):
+    """
+    The model class, which defines our classifier.
+    """
+    def __init__(self):
+        """
+        The constructor of the model.
+        """
+        super().__init__()
+        # self.fc = nn.Linear(3000, 1)
+
+        self.fc1 = nn.Linear(embedding_size_global*3, 10)
+        self.fc2 = nn.Linear(10, 10)
+        self.fc3 = nn.Linear(10, 10)
+        self.fc4 = nn.Linear(10, 10)
+        self.fc5 = nn.Linear(10, 10)
+        self.out = nn.Linear(10, 1) #times 3 because three images are given as input
+        
+
+    def forward(self, x):
+        """
+        The forward pass of the model.
+
+        input: x: torch.Tensor, the input to the model
+
+        output: x: torch.Tensor, the output of the model
+        """
+        x = F.normalize(x, p=2, dim=1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = F.relu(self.fc4(x))
+        x = F.relu(self.fc5(x))
+        x = self.out(x)
+        return x
+
+class FourLayerNet(nn.Module):
+    """
+    The model class, which defines our classifier.
+    """
+    def __init__(self, **kwargs):
+        """
+        The constructor of the model.
+        """
+        super().__init__()
+        self.nodes_per_layer = kwargs.get('nodes_per_layer')
+        self.fc1 = nn.Linear(embedding_size_global*3, self.nodes_per_layer)
+        self.fc2 = nn.Linear(self.nodes_per_layer, self.nodes_per_layer)
+        self.fc3 = nn.Linear(self.nodes_per_layer, self.nodes_per_layer)
+        self.fc4 = nn.Linear(self.nodes_per_layer, self.nodes_per_layer)
+        self.out = nn.Linear(self.nodes_per_layer, 1) #times 3 because three images are given as input
+        
+
+    def forward(self, x):
+        """
+        The forward pass of the model.
+
+        input: x: torch.Tensor, the input to the model
+
+        output: x: torch.Tensor, the output of the model
+        """
+        x = F.normalize(x, p=2, dim=1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = F.relu(self.fc4(x))
+        x = self.out(x)
+        return x
+
+
+
+class ThreeLayerNet(nn.Module):
+    """
+    The model class, which defines our classifier.
+    """
+    def __init__(self, **kwargs):
+        """
+        The constructor of the model.
+        """
+        super().__init__()
+        self.nodes_per_layer = kwargs.get('nodes_per_layer')
+        self.fc1 = nn.Linear(embedding_size_global*3, self.nodes_per_layer)
+        self.fc2 = nn.Linear(self.nodes_per_layer, self.nodes_per_layer)
+        self.fc3 = nn.Linear(self.nodes_per_layer, self.nodes_per_layer)
+        self.out = nn.Linear(self.nodes_per_layer, 1) #times 3 because three images are given as input
+        
+
+    def forward(self, x):
+        """
+        The forward pass of the model.
+
+        input: x: torch.Tensor, the input to the model
+
+        output: x: torch.Tensor, the output of the model
+        """
+        x = F.normalize(x, p=2, dim=1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = self.out(x)
+        return x
+
+class TwoLayerNet(nn.Module):
+    """
+    The model class, which defines our classifier.
+    """
+    def __init__(self, **kwargs):
+        """
+        The constructor of the model.
+        """
+        super().__init__()
+        self.nodes_per_layer = kwargs.get('nodes_per_layer')
+        self.fc1 = nn.Linear(embedding_size_global*3, self.nodes_per_layer)
+        self.fc2 = nn.Linear(self.nodes_per_layer, self.nodes_per_layer)
+        self.out = nn.Linear(self.nodes_per_layer, 1) #times 3 because three images are given as input
+        
+
+    def forward(self, x):
+        """
+        The forward pass of the model.
+
+        input: x: torch.Tensor, the input to the model
+
+        output: x: torch.Tensor, the output of the model
+        """
+        x = F.normalize(x, p=2, dim=1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.out(x)
+        return x
+
+
+
+def train_model(train_loader, model):
     """
     The training procedure of the model; it accepts the training data, defines the model 
     and then trains it.
@@ -208,7 +369,7 @@ def train_model(train_loader):
     
     output: model: torch.nn.Module, the trained model
     """
-    model = Net()
+    # model = Net()
     model.train()
     model.to(device)
     # n_epochs = 10
@@ -275,6 +436,7 @@ def evaluate_model(model, loader, y):
     l1_loss = np.sum(abs(predictions.squeeze() - y))/len(y)
 
     print("Have a loss of",l1_loss)
+    return l1_loss
 
 
 def test_and_save(model, loader):
@@ -304,31 +466,39 @@ if __name__ == '__main__':
 
     print("-- loaded the data --")
 
+    p = 0.8
+    length = y.shape[0]
+    train_loader = create_loader_from_np(X[:int(length*p)], y[:int(length*p)], train = True, batch_size=64)
+    test_loader = create_loader_from_np(X[int(length*p):], train = False, batch_size=2048, shuffle=False)
 
-    doLocalTesting = False 
-    if(doLocalTesting): # Do testing
-        p = 0.8
-        length = y.shape[0]
-        train_loader = create_loader_from_np(X[:int(length*p)], y[:int(length*p)], train = True, batch_size=64)
-        test_loader = create_loader_from_np(X[int(length*p):], train = False, batch_size=2048, shuffle=False)
+    # models = [Net(), WideNet(), DeepNet()] 
+    # nodes_per_layer_list = [10,20,30,40,50]
+    # for n in range(5):
+    #     nodes = 10*(n+1)
+    #     models.append(BalancedNet(nodes_per_layer=nodes))
+    models = [FourLayerNet(nodes_per_layer=20), ThreeLayerNet(nodes_per_layer=20)]
 
-        model = train_model(train_loader)
+    l1_loss_list = list(models)
+    for i, model in enumerate(models):
+        print("-- Training model {} --".format(i))
+        model = train_model(train_loader, model)
+        l1_loss_list[i] = evaluate_model(model, test_loader, y[int(length*p):])
 
-        print("-- trained model --")
+    # Create data loaders for the training and testing data
+    train_loader = create_loader_from_np(X, y, train = True, batch_size=64)
+    test_loader = create_loader_from_np(X_test, train = False, batch_size=2048, shuffle=False)
 
-        evaluate_model(model, test_loader, y[int(length*p):])
-
+    # check which model is better and create new (untrained one to avoid overfitting)
+    if(l1_loss_list[0] < l1_loss_list[1]):
+        best_model = FourLayerNet(nodes_per_layer=20)
     else:
-        # Create data loaders for the training and testing data
-        train_loader = create_loader_from_np(X, y, train = True, batch_size=64)
-        test_loader = create_loader_from_np(X_test, train = False, batch_size=2048, shuffle=False)
+        best_model = ThreeLayerNet(nodes_per_layer=20)
 
+    # choose best model and train it on whole data (not just 80%)
+    model = train_model(train_loader, best_model)
 
-        # define a model and train it
-        model = train_model(train_loader)
-
-        print("-- trained model --")
-        
-        # test the model on the test data
-        test_and_save(model, test_loader)
-        print("Results saved to results.txt")
+    print("-- trained model --")
+    
+    # test the model on the test data
+    test_and_save(model, test_loader)
+    print("Results saved to results.txt")
