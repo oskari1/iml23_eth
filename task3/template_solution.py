@@ -180,8 +180,9 @@ class Net(nn.Module):
         super().__init__()
         # self.fc = nn.Linear(3000, 1)
 
-        self.fc = nn.Linear(embedding_size_global*3, 100)
-        self.out = nn.Linear(100, 1) #times 3 because three images are given as input
+        self.fc1 = nn.Linear(embedding_size_global*3, 20)
+        self.fc2 = nn.Linear(20, 20)
+        self.out = nn.Linear(20, 1) #times 3 because three images are given as input
         
 
     def forward(self, x):
@@ -193,7 +194,8 @@ class Net(nn.Module):
         output: x: torch.Tensor, the output of the model
         """
         x = F.normalize(x, p=2, dim=1)
-        x = F.relu(self.fc(x))
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
         x = self.out(x)
         return x
 
@@ -218,7 +220,7 @@ def train_model(train_loader):
     # best model, train it on the whole training data.
 
     loss_function = nn.L1Loss() 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(n_epochs):        
         for batch_idx, (data, target) in enumerate(train_loader):
