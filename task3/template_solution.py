@@ -128,6 +128,7 @@ def get_data(file, train=True):
     embeddings = np.load('dataset/embeddings.npy')
     # TODO: Normalize the embeddings across the dataset
 
+
     file_to_embedding = {}
     for i in range(len(filenames)):
         file_to_embedding[filenames[i]] = embeddings[i]
@@ -191,6 +192,7 @@ class Net(nn.Module):
 
         output: x: torch.Tensor, the output of the model
         """
+        x = F.normalize(x, p=2, dim=1)
         x = F.relu(self.fc(x))
         x = self.out(x)
         return x
@@ -207,7 +209,8 @@ def train_model(train_loader):
     model = Net()
     model.train()
     model.to(device)
-    n_epochs = 10
+    # n_epochs = 10
+    n_epochs = 5 
     # TODO: define a loss function, optimizer and proceed with training. Hint: use the part 
     # of the training data as a validation split. After each epoch, compute the loss on the 
     # validation split and print it out. This enables you to see how your model is performing 
@@ -278,7 +281,6 @@ def test_and_save(model, loader):
     """
 
     predictions = test_model(model, loader)
-
     np.savetxt("results.txt", predictions, fmt='%i')
 
 
@@ -301,7 +303,7 @@ if __name__ == '__main__':
     print("-- loaded the data --")
 
 
-    doLocalTesting = True
+    doLocalTesting = False 
     if(doLocalTesting): # Do testing
         p = 0.8
         length = y.shape[0]
