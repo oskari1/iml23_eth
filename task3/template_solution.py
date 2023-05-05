@@ -28,6 +28,13 @@ def generate_embeddings():
     # TODO: define a transform to pre-process the images
     print("-- genearte embeddings --")
 
+    # turns an image into a PyTorch tensor (matrix where each entry is a vector (e.g., for rgb information))
+    # according to PyTorch (see https://pytorch.org/vision/stable/models.html), "All the necessary information 
+    # for the inference transforms of each pre-trained model is provided on its weights documentation"
+    # This is because only if the input data matches with the format of the data that was used for training
+    # do we have a certain quality guarantee of the output (here the embeddings) 
+    # need to check at https://pytorch.org/vision/main/models/generated/torchvision.models.resnet50.html
+    # how to correctly preprocess, right now, we are just using transforms.ToTensor
     train_transforms = transforms.Compose([transforms.ToTensor()])
 
     train_dataset = datasets.ImageFolder(root="dataset/", transform=train_transforms)
@@ -54,6 +61,7 @@ def generate_embeddings():
 
     print("-- modifiying pretrained model --")
 
+    # here we define the pre-trained model obtained from PyTorch
     weights = ResNet50_Weights.DEFAULT
     model = resnet50(weights=weights)
 
@@ -80,7 +88,8 @@ def generate_embeddings():
         if(i % 100 == 0): print(i)
         batch = preprocess(a).unsqueeze(0)
         result = newmodel(batch).detach()
-        embeddings[i] = result.numpy().reshape((embedding_size))
+        # transform each
+        embeddings[i] = result.numpy().reshape((embedding_size)) 
    
 
     # for [a,b] in train_loader:
@@ -168,7 +177,10 @@ class Net(nn.Module):
         """
         super().__init__()
         # self.fc = nn.Linear(3000, 1)
-        self.fc = nn.Linear(embedding_size_global*3, 1) #times 3 because three images are given as input
+
+        self.fc = nn.Linear(embedding_size_global*3, 100)
+        self.out = nn.Linear(100, 1) #times 3 because three images are given as input
+        
 
     def forward(self, x):
         """
@@ -178,8 +190,8 @@ class Net(nn.Module):
 
         output: x: torch.Tensor, the output of the model
         """
-        x = self.fc(x)
-        x = F.relu(x)
+        x = F.relu(self.fc(x))
+        x = self.out(x)
         return x
 
 def loss(y, y_pred): #wrong
@@ -209,22 +221,15 @@ def train_model(train_loader):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     for epoch in range(n_epochs):        
-        for [X, y] in train_loader:
-        #print("X: ",X.shape," y: ",y.shape)
-            for i in range(X.shape[0]):
-                model.eval()
-                y_pred = model.forward(X[i])
+        for batch_idx, (data, target) in enumerate(train_loader):
+            optimizer.zero_grad()
+            output = model(data)
+            loss = loss_function(torch.squeeze(output), target)
+            loss.backward()
+            optimizer.step()
 
-                loss = loss_function(y_pred, y[i])
-
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-                # if(i % 16 == 0):
-                #     print("at",i,"with loss",loss.item())
-
-                #print("have a loss of",loss.item())
+            if batch_idx % 100 == 0:
+                print('Epoch {}, Batch idx {}, loss {}'.format(epoch, batch_idx, loss.item()))
 
     print("-- finished training --")
     return model
