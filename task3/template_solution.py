@@ -15,6 +15,7 @@ from torchvision.io import read_image
 from torchvision.models import resnet50, ResNet50_Weights
 
 embedding_size_global = 2048
+torch.manual_seed(3473)
 
 # not tested yet. should be able to run geneeate embeddings (if there are not bugs, which there probably are)
 
@@ -194,10 +195,6 @@ class Net(nn.Module):
         x = self.out(x)
         return x
 
-def loss(y, y_pred): #wrong
-    matches =  np.sum(np.logical_not(np.logical_xor(y,y_pred)))
-    return matches/y.shape[0]
-
 def train_model(train_loader):
     """
     The training procedure of the model; it accepts the training data, defines the model 
@@ -228,7 +225,7 @@ def train_model(train_loader):
             loss.backward()
             optimizer.step()
 
-            if batch_idx % 100 == 0:
+            if batch_idx % 300 == 0:
                 print('Epoch {}, Batch idx {}, loss {}'.format(epoch, batch_idx, loss.item()))
 
     print("-- finished training --")
@@ -242,7 +239,7 @@ def test_model(model, loader):
     input: model: torch.nn.Module, the trained model
            loader: torch.data.util.DataLoader, the object containing the testing data
         
-    output: None, the function saves the predictions to a results.txt file
+    output: the predictions
     """
     model.eval()
     predictions = []
@@ -257,7 +254,33 @@ def test_model(model, loader):
             predicted[predicted < 0.5] = 0
             predictions.append(predicted)
         predictions = np.vstack(predictions)
+
+    return predictions
+
+def evaluate_model(model, loader, y):
+    predictions = test_model(model, loader)
+
+    # print("predictions")
+    # print(predictions.squeeze())
+    # print("resutls")
+    # print(y)
+    # print(abs(predictions - y))
+    # print(len(y))
+
+    l1_loss = np.sum(abs(predictions.squeeze() - y))/len(y)
+
+    print("Have a loss of",l1_loss)
+
+
+def test_and_save(model, loader):
+    """
+    runs test model and saves the predictions
+    """
+
+    predictions = test_model(model, loader)
+
     np.savetxt("results.txt", predictions, fmt='%i')
+
 
 
 # Main function. You don't have to change this
@@ -277,17 +300,31 @@ if __name__ == '__main__':
 
     print("-- loaded the data --")
 
-    # Create data loaders for the training and testing data
-    train_loader = create_loader_from_np(X, y, train = True, batch_size=64)
-    test_loader = create_loader_from_np(X_test, train = False, batch_size=2048, shuffle=False)
 
-    print("-- created data loaders --")
+    doLocalTesting = True
+    if(doLocalTesting): # Do testing
+        p = 0.8
+        length = y.shape[0]
+        train_loader = create_loader_from_np(X[:int(length*p)], y[:int(length*p)], train = True, batch_size=64)
+        test_loader = create_loader_from_np(X[int(length*p):], train = False, batch_size=2048, shuffle=False)
 
-    # define a model and train it
-    model = train_model(train_loader)
+        model = train_model(train_loader)
 
-    print("-- trained model --")
-    
-    # test the model on the test data
-    test_model(model, test_loader)
-    print("Results saved to results.txt")
+        print("-- trained model --")
+
+        evaluate_model(model, test_loader, y[int(length*p):])
+
+    else:
+        # Create data loaders for the training and testing data
+        train_loader = create_loader_from_np(X, y, train = True, batch_size=64)
+        test_loader = create_loader_from_np(X_test, train = False, batch_size=2048, shuffle=False)
+
+
+        # define a model and train it
+        model = train_model(train_loader)
+
+        print("-- trained model --")
+        
+        # test the model on the test data
+        test_and_save(model, test_loader)
+        print("Results saved to results.txt")
