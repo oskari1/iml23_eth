@@ -1,6 +1,8 @@
 # This serves as a template which will guide you through the implementation of this task.  It is advised
 # to first read the whole template and get a sense of the overall structure of the code before trying to fill in any of the TODO gaps
 # First, we import necessary libraries:
+from math import floor
+import random
 import numpy as np
 from torchvision import transforms
 from torch.utils.data import DataLoader, TensorDataset
@@ -180,9 +182,8 @@ class Net(nn.Module):
         super().__init__()
         # self.fc = nn.Linear(3000, 1)
 
-        self.fc1 = nn.Linear(embedding_size_global*3, 20)
-        self.fc2 = nn.Linear(20, 20)
-        self.out = nn.Linear(20, 1) #times 3 because three images are given as input
+        self.fc1 = nn.Linear(embedding_size_global*3, 10)
+        self.out = nn.Linear(10, 1) #times 3 because three images are given as input
         
 
     def forward(self, x):
@@ -195,11 +196,10 @@ class Net(nn.Module):
         """
         x = F.normalize(x, p=2, dim=1)
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
         x = self.out(x)
         return x
 
-def train_model(train_loader):
+def train_model(train_loader, validate):
     """
     The training procedure of the model; it accepts the training data, defines the model 
     and then trains it.
@@ -211,8 +211,7 @@ def train_model(train_loader):
     model = Net()
     model.train()
     model.to(device)
-    # n_epochs = 10
-    n_epochs = 5 
+    n_epochs =5 
     # TODO: define a loss function, optimizer and proceed with training. Hint: use the part 
     # of the training data as a validation split. After each epoch, compute the loss on the 
     # validation split and print it out. This enables you to see how your model is performing 
@@ -222,16 +221,32 @@ def train_model(train_loader):
     loss_function = nn.L1Loss() 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
+    data_len = len(train_loader) 
+    # indices = range(data_len)
+    train_portion = 0.8 if validate else 1 
+    # train_idx = random.sample(indices, k=floor(train_portion*data_len))
+    # test_idx = list(set(indices) - set(train_idx)) 
+    # train_split = [(data, target) for idx, (data, target) in enumerate(train_loader) if idx in train_idx]
+    # val_split = [(data, target) for idx, (data, target) in enumerate(train_loader) if idx in test_idx]
+    train_split = [(data, target) for idx, (data, target) in enumerate(train_loader) if idx <= floor(data_len*train_portion)]
+    val_split = [(data, target) for idx, (data, target) in enumerate(train_loader) if idx > floor(data_len*train_portion)]
+    predictions = [0]*len(val_split)
     for epoch in range(n_epochs):        
-        for batch_idx, (data, target) in enumerate(train_loader):
+        for data, target in train_split:
             optimizer.zero_grad()
             output = model(data)
             loss = loss_function(torch.squeeze(output), target)
             loss.backward()
             optimizer.step()
 
-            if batch_idx % 300 == 0:
-                print('Epoch {}, Batch idx {}, loss {}'.format(epoch, batch_idx, loss.item()))
+        if validate: 
+            model.eval()
+            for i, (data, target) in enumerate(val_split): 
+                val_out = model(data)
+                predictions[i] = get_correct_predictions(torch.squeeze(val_out), target)
+
+            correct_total = [sum(x) for x in zip(*predictions)]
+            print('Epoch {}, accuracy {}'.format(epoch, correct_total[0]/correct_total[1]))
 
     print("-- finished training --")
     return model
@@ -261,6 +276,19 @@ def test_model(model, loader):
         predictions = np.vstack(predictions)
 
     return predictions
+
+def get_correct_predictions(output, target):
+    '''
+    IN: output : torch.Tensor([n])
+        target : torch.Tensor([n])
+    OUT: (#correct_predictions, n)
+    '''
+    predictions = output.clone().detach() 
+    output = output.clone().detach()
+    predictions.apply_(lambda x : 1 if x >= 0.5 else 0)
+    torch.logical_xor(target,predictions, out=output)
+    torch.logical_not(output,out=output)
+    return torch.sum(output), output.size(dim=0)
 
 def evaluate_model(model, loader, y):
     predictions = test_model(model, loader)
@@ -325,10 +353,11 @@ if __name__ == '__main__':
 
 
         # define a model and train it
-        model = train_model(train_loader)
+        _ = train_model(train_loader, validate=True)
+        # model = train_model(train_loader, validate=False)
 
         print("-- trained model --")
         
         # test the model on the test data
-        test_and_save(model, test_loader)
+        # test_and_save(model, test_loader)
         print("Results saved to results.txt")
