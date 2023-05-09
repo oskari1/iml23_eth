@@ -262,16 +262,23 @@ def test_model(model, loader):
 
     return predictions
 
+def get_correct_predictions(output, target):
+    '''
+    IN: output : torch.Tensor([n])
+        target : torch.Tensor([n])
+    OUT: (#correct_predictions, n)
+    '''
+    predictions = output.clone().detach() 
+    output = output.clone().detach()
+    predictions.apply_(lambda x : 1 if x >= 0.5 else 0)
+    torch.logical_xor(target,predictions, out=output)
+    torch.logical_not(output,out=output)
+    return torch.sum(output), output.size(dim=0)
+
 def evaluate_model(model, loader, y):
     predictions = test_model(model, loader)
 
-    # print("predictions")
-    # print(predictions.squeeze())
-    # print("resutls")
-    # print(y)
-    # print(abs(predictions - y))
-    # print(len(y))
-
+    accuracy = 
     l1_loss = np.sum(abs(predictions.squeeze() - y))/len(y)
 
     print("Have a loss of",l1_loss)
