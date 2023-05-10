@@ -2,6 +2,7 @@
 # to first read the whole template and get a sense of the overall structure of the code before trying to fill in any of the TODO gaps
 # First, we import necessary libraries:
 import numpy as np
+from sklearn import preprocessing
 from torchvision import transforms
 from torch.utils.data import DataLoader, TensorDataset
 import os
@@ -15,6 +16,8 @@ from torchvision.io import read_image
 from torchvision.models import resnet50, ResNet50_Weights
 
 embedding_size_global = 2048
+input_scaler = 0
+output_scaler = 0
 torch.manual_seed(3473)
 
 # not tested yet. should be able to run geneeate embeddings (if there are not bugs, which there probably are)
@@ -127,8 +130,6 @@ def get_data(file, train=True):
     filenames = [s[0].split('/')[-1].replace('.jpg', '') for s in train_dataset.samples]
     embeddings = np.load('dataset/embeddings.npy')
     # TODO: Normalize the embeddings across the dataset
-
-
     file_to_embedding = {}
     for i in range(len(filenames)):
         file_to_embedding[filenames[i]] = embeddings[i]
@@ -145,7 +146,11 @@ def get_data(file, train=True):
             y.append(0)
     X = np.vstack(X)
     y = np.hstack(y)
-    return X, y
+
+    global input_scaler
+    input_scaler = preprocessing.StandardScaler().fit(X)
+    X_scaled = input_scaler.transform(X)
+    return X_scaled, y
 
 # Hint: adjust batch_size and num_workers to your PC configuration, so that you don't run out of memory
 def create_loader_from_np(X, y = None, train = True, batch_size=64, shuffle=True, num_workers = 4):
@@ -180,9 +185,17 @@ class Net(nn.Module):
         super().__init__()
         # self.fc = nn.Linear(3000, 1)
 
-        self.fc1 = nn.Linear(embedding_size_global*3, 20)
-        self.fc2 = nn.Linear(20, 20)
-        self.out = nn.Linear(20, 1) #times 3 because three images are given as input
+        self.hidden = nn.Linear(embedding_size_global*3, 20)
+        self.relu = nn.ReLU()
+        self.bn1 = nn.BatchNorm1d(20)
+        self.hidden1 = nn.Linear(20, 20)
+        self.relu1 = nn.ReLU()
+        self.bn2 = nn.BatchNorm1d(20)
+        self.hidden2 = nn.Linear(20, 20)
+        self.relu2 = nn.ReLU()
+        self.bn3 = nn.BatchNorm1d(20)
+        self.out = nn.Linear(20, 1) 
+        self.sigmoid = nn.Sigmoid()
         
 
     def forward(self, x):
@@ -193,10 +206,10 @@ class Net(nn.Module):
 
         output: x: torch.Tensor, the output of the model
         """
-        x = F.normalize(x, p=2, dim=1)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.out(x)
+        x = F.relu(self.hidden(x))
+        x = F.relu(self.hidden1(self.bn1(x)))
+        x = F.relu(self.hidden2(self.bn2(x)))
+        x = F.sigmoid(self.out(self.bn3(x)))
         return x
 
 def train_model(train_loader):
@@ -226,6 +239,7 @@ def train_model(train_loader):
         for batch_idx, (data, target) in enumerate(train_loader):
             optimizer.zero_grad()
             output = model(data)
+            # loss = loss_function(torch.squeeze(output), target.to(torch.float32))
             loss = loss_function(torch.squeeze(output), target)
             loss.backward()
             optimizer.step()
@@ -262,26 +276,26 @@ def test_model(model, loader):
 
     return predictions
 
-def get_correct_predictions(output, target):
+def get_accuracy(predictions, target):
     '''
     IN: output : torch.Tensor([n])
         target : torch.Tensor([n])
     OUT: (#correct_predictions, n)
     '''
-    predictions = output.clone().detach() 
-    output = output.clone().detach()
-    predictions.apply_(lambda x : 1 if x >= 0.5 else 0)
-    torch.logical_xor(target,predictions, out=output)
+    output = predictions.clone().detach()
+    torch.logical_xor(target,predictions,out=output)
     torch.logical_not(output,out=output)
-    return torch.sum(output), output.size(dim=0)
+    return torch.sum(output)/output.size(dim=0)
 
 def evaluate_model(model, loader, y):
     predictions = test_model(model, loader)
+    predictions = torch.from_numpy(predictions)
 
-    accuracy = 
-    l1_loss = np.sum(abs(predictions.squeeze() - y))/len(y)
+    accuracy = get_accuracy(predictions.squeeze(), y)
+    # l1_loss = np.sum(abs(predictions.squeeze() - y))/len(y)
 
-    print("Have a loss of",l1_loss)
+    # print("Have a loss of",l1_loss)
+    print("Accuracy on validation set",accuracy)
 
 
 def test_and_save(model, loader):
@@ -323,7 +337,7 @@ if __name__ == '__main__':
 
         print("-- trained model --")
 
-        evaluate_model(model, test_loader, y[int(length*p):])
+        evaluate_model(model, test_loader, torch.from_numpy(y[int(length*p):]))
 
     else:
         # Create data loaders for the training and testing data
