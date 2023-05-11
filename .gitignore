@@ -1,1 +1,7 @@
 task3/dataset/
+task4/pretrain_features.csv
+task4/pretrain_labels.csv
+task4/test_features.csv
+task4/train_features.csv
+task4/train_labels.csv
+playground/
