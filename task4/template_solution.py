@@ -6,9 +6,22 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+import torch.nn.functional as F
+
+from sklearn.linear_model import Ridge, HuberRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LinearRegression
+
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator, TransformerMixin
 
+
+from sklearn.datasets import load_iris
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.gaussian_process.kernels import RBF
+
+np.random.seed(11234)
+torch.manual_seed(11234)
 
 
 def load_data():
@@ -34,14 +47,20 @@ class Net(nn.Module):
     """
     The model class, which defines our feature extractor used in pretraining.
     """
-    def __init__(self):
+    def __init__(self, in_features):
         """
         The constructor of the model.
         """
         super().__init__()
         # TODO: Define the architecture of the model. It should be able to be trained on pretraing data 
         # and then used to extract features from the training and test data.
-
+        self.in_features = in_features
+        embedding_size = 20
+        self.fc1 = nn.Linear(in_features, 100)
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Linear(100, embedding_size)
+        self.relu2 = nn.ReLU()
+        self.out = nn.Linear(embedding_size, 1)
 
     def forward(self, x):
         """
@@ -53,9 +72,17 @@ class Net(nn.Module):
         """
         # TODO: Implement the forward pass of the model, in accordance with the architecture 
         # defined in the constructor.
+        x = self.get_embeddings(x)
+        x = self.out(x)
+
         return x
     
-def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
+    def get_embeddings(self, x):
+        x = self.relu1(self.fc1(x))
+        x = self.relu2(self.fc2(x))
+        return x
+    
+def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     """
     This function trains the feature extractor on the pretraining data and returns a function which
     can be used to extract features from the training and test data.
@@ -67,18 +94,50 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
             
     output: make_features: function, a function which can be used to extract features from the training and test data
     """
+    print("-- in make_feature_extractor --")
+
     # Pretraining data loading
     in_features = x.shape[-1]
     x_tr, x_val, y_tr, y_val = train_test_split(x, y, test_size=eval_size, random_state=0, shuffle=True)
     x_tr, x_val = torch.tensor(x_tr, dtype=torch.float), torch.tensor(x_val, dtype=torch.float)
     y_tr, y_val = torch.tensor(y_tr, dtype=torch.float), torch.tensor(y_val, dtype=torch.float)
 
+    # assuming x_tr: x_train and x_val: x_evalulate
+
     # model declaration
-    model = Net()
+    model = Net(in_features)
     model.train()
     
-    # TODO: Implement the training loop. The model should be trained on the pretraining data. Use validation set 
+    # todo: Implement the training loop. The model should be trained on the pretraining data. Use validation set 
     # to monitor the loss.
+
+    # === Training the Model ===
+    criterion = nn.L1Loss()
+    valildationLoss = nn.L1Loss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+    epochs = 100
+    losses = []
+
+    for i in range(epochs):
+        y_pred = model.forward(x_tr).squeeze()
+        loss = criterion(y_pred, y_tr)
+        losses.append(loss)
+
+        if(i % 10 == 0):
+            print(f'epoch: {i:2}  loss: {loss.item():10.8f}')
+        
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        y_pred_test = model.forward(x_val).squeeze()
+        if(i % 10 == 0):
+            print(f"\t\tWe have a loss of {valildationLoss(y_pred_test, y_val):10.8f}")
+
+
+    # print(f"\t\tWe have a loss of {valildationLoss(y_pred_test, y_val):10.8f}")
+    
 
 
 
@@ -94,7 +153,7 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
         """
         model.eval()
         # TODO: Implement the feature extraction, a part of a pretrained model used later in the pipeline.
-        return x
+        return model.get_embeddings(x)
 
     return make_features
 
@@ -135,25 +194,96 @@ def get_regression_model():
     """
     # TODO: Implement the regression model. It should be able to be trained on the features extracted
     # by the feature extractor.
-    model = None
+    model = HuberRegressor(alpha=1, max_iter = 1000, epsilon=1) #TODO, this could be better
     return model
 
 # Main function. You don't have to change this
 if __name__ == '__main__':
+    print("-- starting in main --")
     # Load data
     x_pretrain, y_pretrain, x_train, y_train, x_test = load_data()
-    print("Data loaded!")
+    print("-- data loaded! --")
+
+    # Shapes: (05k, 1k) (50k) train: (100, 1k) (100) (10k, 1k)
+
+
     # Utilize pretraining data by creating feature extractor which extracts lumo energy 
     # features from available initial features
     feature_extractor =  make_feature_extractor(x_pretrain, y_pretrain)
+
+    print("-- features extractor done --")
+
     PretrainedFeatureClass = make_pretraining_class({"pretrain": feature_extractor})
     
     # regression model
     regression_model = get_regression_model()
 
     y_pred = np.zeros(x_test.shape[0])
+
     # TODO: Implement the pipeline. It should contain feature extraction and regression. You can optionally
     # use other sklearn tools, such as StandardScaler, FunctionTransformer, etc.
+
+    print("-- fitting part II --")
+
+
+    def temp(x):
+        x = torch.tensor(x, dtype=torch.float)
+        x = feature_extractor(x)
+        return x.detach().numpy()
+
+    x_embeddings = np.apply_along_axis(temp, 1, x_train)
+
+
+    #model = HuberRegressor(alpha=1, max_iter = 1000, epsilon=1) #TODO, this could be better
+    split_K = 80
+
+
+    # =========================================================================================================
+    # attempt with gaussian kernal, hasn't worked yet
+
+    # kernel = 1.0 * RBF(1.0)
+    # gpc = GaussianProcessClassifier(kernel=kernel, random_state=0).fit(x_embeddings[0:split_K], y_train[0:split_K])
+
+
+    # #model.fit(x_embeddings[0:10], y_train[0:10])
+
+    # print("-- done fitting --")
+
+    # print("score trained:",1-gpc.score(x_embeddings[:split_K], y_train[:split_K]))
+    # print("score unseen: ",1-gpc.score(x_embeddings[split_K:], y_train[split_K:]))
+          
+
+    # # train it on the whole set
+    # gpc2 = GaussianProcessClassifier(kernel=kernel, random_state=0).fit(x_embeddings, y_train)
+    # print("score mode2:  ",1-gpc2.score(x_embeddings, y_train))
+    # y_pred = gpc2.predict(np.apply_along_axis(temp, 1, x_test))
+
+
+
+    # =========================================================================================================
+
+
+    model = LinearRegression().fit(x_embeddings[0:split_K], y_train[0:split_K])
+
+    #model.fit(x_embeddings[0:10], y_train[0:10])
+
+    print("-- done fitting --")
+
+    print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
+    print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
+          
+
+    # train it on the whole set
+    model2 = LinearRegression().fit(x_embeddings, y_train)
+    print("score mode2:  ",1-model2.score(x_embeddings, y_train))
+    y_pred = model2.predict(np.apply_along_axis(temp, 1, x_test))
+
+    # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
+    # print(scores)
+
+
+
+    print("-- saving the data --")
 
     assert y_pred.shape == (x_test.shape[0],)
     y_pred = pd.DataFrame({"y": y_pred}, index=x_test.index)
