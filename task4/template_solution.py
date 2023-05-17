@@ -3,6 +3,7 @@
 # First, we import necessary libraries:
 import pandas as pd
 import numpy as np
+from sklearn import preprocessing
 import torch
 import torch.nn as nn
 
@@ -17,8 +18,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 
 from sklearn.datasets import load_iris
-from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.gaussian_process.kernels import RBF
+from sklearn.gaussian_process import GaussianProcessClassifier, GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, WhiteKernel
 
 np.random.seed(11234)
 torch.manual_seed(11234)
@@ -112,8 +113,8 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     # to monitor the loss.
 
     # === Training the Model ===
-    criterion = nn.L1Loss()
-    valildationLoss = nn.L1Loss()
+    criterion = nn.MSELoss()
+    valildationLoss = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     epochs = 100
@@ -231,61 +232,50 @@ if __name__ == '__main__':
         x = feature_extractor(x)
         return x.detach().numpy()
 
-    x_embeddings = np.apply_along_axis(temp, 1, x_train)
+    # extract embeddings for train- and test-data
+    x_test_orig = x_test
+    x_train_orig = x_train
+    x_train = np.apply_along_axis(temp, 1, x_train)
+    x_test = np.apply_along_axis(temp, 1, x_test)
 
+    # normalize data (recommended for GPR)
+    old_y_train_shape = y_train.shape
+    input_scaler = preprocessing.StandardScaler().fit(x_train)
+    x_train = input_scaler.transform(x_train)
+    x_test = input_scaler.transform(x_test)
+    rows, _ = x_train.shape
+    y_train_reshaped = y_train.reshape((rows, 1))
+    output_scaler = preprocessing.StandardScaler().fit(y_train_reshaped) 
+    y_train = output_scaler.transform(y_train_reshaped).reshape(old_y_train_shape)
 
-    #model = HuberRegressor(alpha=1, max_iter = 1000, epsilon=1) #TODO, this could be better
-    split_K = 80
+    # ls_list = [1e-4, 1e-3, 1e-2, 1e-1]
+    noise_list = [1e-4, 1e-3, 1e-2, 1e-1]
+    # ls = np.full((10,), 1e-1) # best length_scale found empirically (only one that converges)
+    ls = 1e-1
+    k = 5 
+    mean_scores = list(noise_list)
 
+    for i, ns in enumerate(noise_list):
+        print("Using noise = {}".format(ns))
+        kernel = RBF(length_scale=ls) + WhiteKernel(ns)
+        gpr = GaussianProcessRegressor(kernel=kernel, random_state=0) 
+        scores = cross_val_score(gpr, x_train, y_train, cv=k)
+        mean_scores[i] = scores.mean()
+        print("Got mean score of {} for noise = {}".format(mean_scores[i], ns))
 
-    # =========================================================================================================
-    # attempt with gaussian kernal, hasn't worked yet
+    best_ns = noise_list[mean_scores.index(max(mean_scores))]
+    print("best noise = {}".format(best_ns))
 
-    # kernel = 1.0 * RBF(1.0)
-    # gpc = GaussianProcessClassifier(kernel=kernel, random_state=0).fit(x_embeddings[0:split_K], y_train[0:split_K])
-
-
-    # #model.fit(x_embeddings[0:10], y_train[0:10])
-
-    # print("-- done fitting --")
-
-    # print("score trained:",1-gpc.score(x_embeddings[:split_K], y_train[:split_K]))
-    # print("score unseen: ",1-gpc.score(x_embeddings[split_K:], y_train[split_K:]))
-          
-
-    # # train it on the whole set
-    # gpc2 = GaussianProcessClassifier(kernel=kernel, random_state=0).fit(x_embeddings, y_train)
-    # print("score mode2:  ",1-gpc2.score(x_embeddings, y_train))
-    # y_pred = gpc2.predict(np.apply_along_axis(temp, 1, x_test))
-
-
-
-    # =========================================================================================================
-
-
-    model = LinearRegression().fit(x_embeddings[0:split_K], y_train[0:split_K])
-
-    #model.fit(x_embeddings[0:10], y_train[0:10])
-
-    print("-- done fitting --")
-
-    print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
-    print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
-          
-
-    # train it on the whole set
-    model2 = LinearRegression().fit(x_embeddings, y_train)
-    print("score mode2:  ",1-model2.score(x_embeddings, y_train))
-    y_pred = model2.predict(np.apply_along_axis(temp, 1, x_test))
-
-    # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
-    # print(scores)
-
-
+    gpr = GaussianProcessRegressor(kernel=RBF(length_scale=ls) + WhiteKernel(best_ns), random_state=0).fit(x_train, y_train)
+    y_pred_scaled = gpr.predict(x_test)
+    # need to rescale since the Gaussian regressor is dealing with standardized data (zero mean, unit variance)
+    rows, _ = x_test.shape
+    y_pred = output_scaler.inverse_transform(y_pred_scaled.reshape((rows,1))) 
+    y_pred = y_pred.reshape(y_pred_scaled.shape)
 
     print("-- saving the data --")
 
     assert y_pred.shape == (x_test.shape[0],)
-    y_pred = pd.DataFrame({"y": y_pred}, index=x_test.index)
+    y_pred = pd.DataFrame({"y": y_pred}, index=x_test_orig.index)
     y_pred.to_csv("results.csv", index_label="Id")
     print("Predictions saved, all done!")
