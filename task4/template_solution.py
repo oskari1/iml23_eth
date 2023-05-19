@@ -1,11 +1,15 @@
 # This serves as a template which will guide you through the implementation of this task.  It is advised
 # to first read the whole template and get a sense of the overall structure of the code before trying to fill in any of the TODO gaps
 # First, we import necessary libraries:
+from math import ceil
+from matplotlib import pyplot as plt
 import pandas as pd
 import numpy as np
 from sklearn import preprocessing
+from sklearn.preprocessing import StandardScaler 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset
 
 import torch.nn.functional as F
 
@@ -56,7 +60,7 @@ class Net(nn.Module):
         # TODO: Define the architecture of the model. It should be able to be trained on pretraing data 
         # and then used to extract features from the training and test data.
         self.in_features = in_features
-        embedding_size = 20
+        embedding_size = 20  
         self.fc1 = nn.Linear(in_features, 100)
         self.relu1 = nn.ReLU()
         self.fc2 = nn.Linear(100, embedding_size)
@@ -100,10 +104,25 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     # Pretraining data loading
     in_features = x.shape[-1]
     x_tr, x_val, y_tr, y_val = train_test_split(x, y, test_size=eval_size, random_state=0, shuffle=True)
+    # print("x_pretrain:")
+    # print(x_tr[0,:])
+
+    # Standarize data 
+    global input_scaler
+    input_scaler = StandardScaler()
+    input_scaler.fit(x_tr)
+    x_tr = input_scaler.transform(x_tr)
+    x_val = input_scaler.transform(x_val)
+    # print("x_pretrain after standardizing:")
+    # print(x_tr[0,:])
+
+
     x_tr, x_val = torch.tensor(x_tr, dtype=torch.float), torch.tensor(x_val, dtype=torch.float)
     y_tr, y_val = torch.tensor(y_tr, dtype=torch.float), torch.tensor(y_val, dtype=torch.float)
 
-    # assuming x_tr: x_train and x_val: x_evalulate
+    # create loader for training data (to escape local minima during training)
+    train_dataset = TensorDataset(x_tr.type(torch.float), y_tr.type(torch.float))
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=4)
 
     # model declaration
     model = Net(in_features)
@@ -114,33 +133,42 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
 
     # === Training the Model ===
     criterion = nn.MSELoss()
-    valildationLoss = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    epochs = 100
-    losses = []
+    epochs = 10 
+    tr_losses = [0.]*epochs
+    val_losses = [0.]*epochs
 
-    for i in range(epochs):
-        y_pred = model.forward(x_tr).squeeze()
-        loss = criterion(y_pred, y_tr)
-        losses.append(loss)
+    # train model
+    loss_per_batch = (ceil(x_tr.shape[0]/batch_size)) * [0]
+    for epoch in range(epochs):
+        for batch_idx, (data, target) in enumerate(train_loader):
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(torch.squeeze(output), target.to(torch.float32))
+            # loss = criterion(output, target.to(torch.float32))
+            loss.backward()
+            optimizer.step()
+            loss_per_batch[batch_idx] = loss.item()
 
-        if(i % 10 == 0):
-            print(f'epoch: {i:2}  loss: {loss.item():10.8f}')
-        
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
+        model.eval()
         y_pred_test = model.forward(x_val).squeeze()
-        if(i % 10 == 0):
-            print(f"\t\tWe have a loss of {valildationLoss(y_pred_test, y_val):10.8f}")
+        val_loss = criterion(y_pred_test, y_val).item()
 
+        training_loss = sum(loss_per_batch)/len(loss_per_batch)
+        tr_losses[epoch] = training_loss
+        val_losses[epoch] = val_loss
+        print(f"training loss   {training_loss:10.8f}")
+        print(f"validation loss {val_loss:10.8f} \n")
 
-    # print(f"\t\tWe have a loss of {valildationLoss(y_pred_test, y_val):10.8f}")
-    
-
-
+    # plot loss over training epochs
+    plt.plot(range(epochs), tr_losses, label='Training loss')
+    plt.plot(range(epochs), val_losses, label='Validation loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Train and validation loss over time')
+    plt.legend()
+    plt.show()
 
     def make_features(x):
         """
@@ -235,14 +263,14 @@ if __name__ == '__main__':
     # extract embeddings for train- and test-data
     x_test_orig = x_test
     x_train_orig = x_train
-    x_train = np.apply_along_axis(temp, 1, x_train)
-    x_test = np.apply_along_axis(temp, 1, x_test)
+    x_train = np.apply_along_axis(temp, 1, input_scaler.transform(x_train))
+    x_test = np.apply_along_axis(temp, 1, input_scaler.transform(x_test))
 
-    # normalize data (recommended for GPR)
+    # normalize embedded data (again, recommended for GPR)
+    GPR_input_scaler = preprocessing.StandardScaler().fit(x_train)
     old_y_train_shape = y_train.shape
-    input_scaler = preprocessing.StandardScaler().fit(x_train)
-    x_train = input_scaler.transform(x_train)
-    x_test = input_scaler.transform(x_test)
+    x_train = GPR_input_scaler.transform(x_train)
+    x_test = GPR_input_scaler.transform(x_test)
     rows, _ = x_train.shape
     y_train_reshaped = y_train.reshape((rows, 1))
     output_scaler = preprocessing.StandardScaler().fit(y_train_reshaped) 
@@ -268,7 +296,7 @@ if __name__ == '__main__':
 
     gpr = GaussianProcessRegressor(kernel=RBF(length_scale=ls) + WhiteKernel(best_ns), random_state=0).fit(x_train, y_train)
     y_pred_scaled = gpr.predict(x_test)
-    # need to rescale since the Gaussian regressor is dealing with standardized data (zero mean, unit variance)
+    # need to rescale since the Gaussian regressor was trained on standardized output (zero mean, unit variance)
     rows, _ = x_test.shape
     y_pred = output_scaler.inverse_transform(y_pred_scaled.reshape((rows,1))) 
     y_pred = y_pred.reshape(y_pred_scaled.shape)
