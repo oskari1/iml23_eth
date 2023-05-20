@@ -58,10 +58,11 @@ class Net(nn.Module):
         # TODO: Define the architecture of the model. It should be able to be trained on pretraing data 
         # and then used to extract features from the training and test data.
         self.in_features = in_features
-        embedding_size = 10  
-        self.fc1 = nn.Linear(in_features, 400)
+        embedding_size = 10
+        hidden = 400
+        self.fc1 = nn.Linear(in_features,hidden) 
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(400, embedding_size)
+        self.fc2 = nn.Linear(hidden, embedding_size)
         self.relu2 = nn.ReLU()
         self.out = nn.Linear(embedding_size, 1)
 
@@ -102,8 +103,8 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     # Pretraining data loading
     in_features = x.shape[-1]
     x_tr, x_val, y_tr, y_val = train_test_split(x, y, test_size=eval_size, random_state=0, shuffle=True)
-    print("x_pretrain:")
-    print(x_tr[0,:])
+    # print("x_pretrain:")
+    # print(x_tr[0,:])
     subset_size = 100
     subset_indices = np.random.choice(len(y_val), size=subset_size, replace=False)
     actual_y_val = y_val[subset_indices]
@@ -115,8 +116,8 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     input_scaler.fit(x_tr)
     x_tr = input_scaler.transform(x_tr)
     x_val = input_scaler.transform(x_val)
-    print("x_pretrain after standardizing:")
-    print(x_tr[0,:])
+    # print("x_pretrain after standardizing:")
+    # print(x_tr[0,:])
 
 
     x_tr, x_val = torch.tensor(x_tr, dtype=torch.float), torch.tensor(x_val, dtype=torch.float)
@@ -276,21 +277,21 @@ if __name__ == '__main__':
         return x.detach().numpy()
 
     # extract embeddings for train- and test-data
-    print("x_train before extracting features")
-    print(x_train[0,:])
+    # print("x_train before extracting features")
+    # print(x_train[0,:])
     x_test_orig = x_test
     x_train_orig = x_train
     x_train = np.apply_along_axis(temp, 1, input_scaler.transform(x_train))
     x_test = np.apply_along_axis(temp, 1, input_scaler.transform(x_test.values))
-    print("x_train after extracting features")
-    print(x_train[0,:])
+    # print("x_train after extracting features")
+    # print(x_train[0,:])
 
     # normalize embedded data (again, recommended for GPR)
     GPR_input_scaler = preprocessing.StandardScaler().fit(x_train)
     old_y_train_shape = y_train.shape
     x_train = GPR_input_scaler.transform(x_train)
-    print("x_train after extracting features AND after scaling")
-    print(x_train[0,:])
+    # print("x_train after extracting features AND after scaling")
+    # print(x_train[0,:])
     x_test = GPR_input_scaler.transform(x_test)
     rows, _ = x_train.shape
     y_train_reshaped = y_train.reshape((rows, 1))
@@ -305,27 +306,31 @@ if __name__ == '__main__':
     # plt.show()
 
     # # do Gaussian process regression on extracted features
-    # ls_list = [1e-4, 1e-3, 1e-2, 1e-1]
-    noise_list = [1e-4, 1e-3, 1e-2, 1e-1]
+    ls_list = [1e-1]
+    ns_list = [1e-4, 1e-3, 1e-2, 1e-1]
     # ls = np.full((10,), 1e-1) # best length_scale found empirically (only one that converges)
     ls = 1e-1
     k = 5 
-    mean_scores = list(noise_list)
+    mean_scores = np.zeros((len(ns_list), len(ls_list)))
 
-    for i, ns in enumerate(noise_list):
-        print("Using noise = {}".format(ns))
-        kernel = RBF(length_scale=ls) + WhiteKernel(ns)
-        # kernel = RBF(length_scale=ls) 
-        gpr = GaussianProcessRegressor(kernel=kernel, random_state=0) 
-        scores = cross_val_score(gpr, x_train, y_train, cv=k)
-        mean_scores[i] = scores.mean()
-        print("Got mean score of {} for noise = {}".format(mean_scores[i], ns))
+    for i, ns in enumerate(ns_list):
+        for j, ls in enumerate(ls_list):
+            kernel = RBF(length_scale=ls) + WhiteKernel(ns)
+            # kernel = RBF(length_scale=ls) 
+            gpr = GaussianProcessRegressor(kernel=kernel, random_state=0) 
+            scores = cross_val_score(gpr, x_train, y_train, cv=k)
+            mean_scores[i,j] = scores.mean()
+            print("Got mean score of {} for ns = {} and ls = {}".format(mean_scores[i,j], ns, ls))
 
-    best_ns = noise_list[mean_scores.index(max(mean_scores))]
+    # best_ns = noise_list[mean_scores.index(max(mean_scores))]
     # best_ns = ls_list[mean_scores.index(max(mean_scores))]
-    print("best noise = {}".format(best_ns))
+    best_ns_idx, best_ls_idx = np.unravel_index(np.argmax(mean_scores, axis=None), mean_scores.shape)
+    best_ns = ns_list[best_ns_idx]
+    best_ls = ls_list[best_ls_idx]
 
-    gpr = GaussianProcessRegressor(kernel=RBF(length_scale=ls) + WhiteKernel(best_ns), random_state=0).fit(x_train, y_train)
+    print("best_ns, best_ls = {}, {}".format(best_ns, best_ls))
+
+    gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls) + WhiteKernel(best_ns), random_state=0).fit(x_train, y_train)
     # gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ns)).fit(x_train, y_train)
     y_pred_scaled = gpr.predict(x_test)
     # need to rescale since the Gaussian regressor was trained on standardized output (zero mean, unit variance)
