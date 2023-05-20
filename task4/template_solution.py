@@ -20,8 +20,6 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator, TransformerMixin
 
-
-from sklearn.datasets import load_iris
 from sklearn.gaussian_process import GaussianProcessClassifier, GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, WhiteKernel
 
@@ -60,10 +58,10 @@ class Net(nn.Module):
         # TODO: Define the architecture of the model. It should be able to be trained on pretraing data 
         # and then used to extract features from the training and test data.
         self.in_features = in_features
-        embedding_size = 20  
-        self.fc1 = nn.Linear(in_features, 100)
+        embedding_size = 10  
+        self.fc1 = nn.Linear(in_features, 400)
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(100, embedding_size)
+        self.fc2 = nn.Linear(400, embedding_size)
         self.relu2 = nn.ReLU()
         self.out = nn.Linear(embedding_size, 1)
 
@@ -104,8 +102,12 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     # Pretraining data loading
     in_features = x.shape[-1]
     x_tr, x_val, y_tr, y_val = train_test_split(x, y, test_size=eval_size, random_state=0, shuffle=True)
-    # print("x_pretrain:")
-    # print(x_tr[0,:])
+    print("x_pretrain:")
+    print(x_tr[0,:])
+    subset_size = 100
+    subset_indices = np.random.choice(len(y_val), size=subset_size, replace=False)
+    actual_y_val = y_val[subset_indices]
+    
 
     # Standarize data 
     global input_scaler
@@ -113,8 +115,8 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     input_scaler.fit(x_tr)
     x_tr = input_scaler.transform(x_tr)
     x_val = input_scaler.transform(x_val)
-    # print("x_pretrain after standardizing:")
-    # print(x_tr[0,:])
+    print("x_pretrain after standardizing:")
+    print(x_tr[0,:])
 
 
     x_tr, x_val = torch.tensor(x_tr, dtype=torch.float), torch.tensor(x_val, dtype=torch.float)
@@ -127,20 +129,28 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     # model declaration
     model = Net(in_features)
     model.train()
+
+    # before training:
+    model.eval()
+    y_val_pred = model.forward(x_val).squeeze().detach().numpy()
+    predicted_y_val_before = y_val_pred[subset_indices]
     
     # todo: Implement the training loop. The model should be trained on the pretraining data. Use validation set 
     # to monitor the loss.
 
     # === Training the Model ===
     criterion = nn.MSELoss()
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    epochs = 10 
+    # epochs = 5 
+    epochs = 5 
+    # epochs = 20 
     tr_losses = [0.]*epochs
     val_losses = [0.]*epochs
 
     # train model
-    loss_per_batch = (ceil(x_tr.shape[0]/batch_size)) * [0]
+    loss_per_batch = (ceil(x_tr.shape[0]/batch_size)) * [0.]
     for epoch in range(epochs):
         for batch_idx, (data, target) in enumerate(train_loader):
             optimizer.zero_grad()
@@ -169,6 +179,18 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     plt.title('Train and validation loss over time')
     plt.legend()
     plt.show()
+
+    model.eval()
+    y_val_pred = model.forward(x_val).squeeze().detach().numpy()
+    predicted_y_val_after = y_val_pred[subset_indices]
+    plt.plot(range(subset_size), actual_y_val, label="actual y_val", color="blue")
+    plt.plot(range(subset_size), predicted_y_val_before, label="predicted y_val before", color="orange")
+    plt.plot(range(subset_size), predicted_y_val_after, label="predicted y_val after", color="red")
+    plt.xlabel('Index')
+    plt.ylabel('y_val')
+    plt.legend()
+    plt.show()
+
 
     def make_features(x):
         """
@@ -231,6 +253,14 @@ if __name__ == '__main__':
     print("-- starting in main --")
     # Load data
     x_pretrain, y_pretrain, x_train, y_train, x_test = load_data()
+    # Plot the histogram
+    # plt.hist(y_train, bins='auto', color='blue', alpha=0.7, rwidth=0.85)
+    # plt.grid(axis='y', alpha=0.5)
+    # plt.xlabel('Value')
+    # plt.ylabel('Frequency')
+    # plt.title('Histogram')
+    # plt.show()
+
     print("-- data loaded! --")
 
     # Shapes: (05k, 1k) (50k) train: (100, 1k) (100) (10k, 1k)
@@ -240,42 +270,41 @@ if __name__ == '__main__':
     # features from available initial features
     feature_extractor =  make_feature_extractor(x_pretrain, y_pretrain)
 
-    print("-- features extractor done --")
-
-    PretrainedFeatureClass = make_pretraining_class({"pretrain": feature_extractor})
-    
-    # regression model
-    regression_model = get_regression_model()
-
-    y_pred = np.zeros(x_test.shape[0])
-
-    # TODO: Implement the pipeline. It should contain feature extraction and regression. You can optionally
-    # use other sklearn tools, such as StandardScaler, FunctionTransformer, etc.
-
-    print("-- fitting part II --")
-
-
     def temp(x):
         x = torch.tensor(x, dtype=torch.float)
         x = feature_extractor(x)
         return x.detach().numpy()
 
     # extract embeddings for train- and test-data
+    print("x_train before extracting features")
+    print(x_train[0,:])
     x_test_orig = x_test
     x_train_orig = x_train
     x_train = np.apply_along_axis(temp, 1, input_scaler.transform(x_train))
-    x_test = np.apply_along_axis(temp, 1, input_scaler.transform(x_test))
+    x_test = np.apply_along_axis(temp, 1, input_scaler.transform(x_test.values))
+    print("x_train after extracting features")
+    print(x_train[0,:])
 
     # normalize embedded data (again, recommended for GPR)
     GPR_input_scaler = preprocessing.StandardScaler().fit(x_train)
     old_y_train_shape = y_train.shape
     x_train = GPR_input_scaler.transform(x_train)
+    print("x_train after extracting features AND after scaling")
+    print(x_train[0,:])
     x_test = GPR_input_scaler.transform(x_test)
     rows, _ = x_train.shape
     y_train_reshaped = y_train.reshape((rows, 1))
     output_scaler = preprocessing.StandardScaler().fit(y_train_reshaped) 
     y_train = output_scaler.transform(y_train_reshaped).reshape(old_y_train_shape)
 
+    # plt.hist(y_train, bins='auto', color='red', alpha=0.7, rwidth=0.85)
+    # plt.grid(axis='y', alpha=0.5)
+    # plt.xlabel('Value')
+    # plt.ylabel('Frequency')
+    # plt.title('Histogram')
+    # plt.show()
+
+    # # do Gaussian process regression on extracted features
     # ls_list = [1e-4, 1e-3, 1e-2, 1e-1]
     noise_list = [1e-4, 1e-3, 1e-2, 1e-1]
     # ls = np.full((10,), 1e-1) # best length_scale found empirically (only one that converges)
@@ -286,15 +315,18 @@ if __name__ == '__main__':
     for i, ns in enumerate(noise_list):
         print("Using noise = {}".format(ns))
         kernel = RBF(length_scale=ls) + WhiteKernel(ns)
+        # kernel = RBF(length_scale=ls) 
         gpr = GaussianProcessRegressor(kernel=kernel, random_state=0) 
         scores = cross_val_score(gpr, x_train, y_train, cv=k)
         mean_scores[i] = scores.mean()
         print("Got mean score of {} for noise = {}".format(mean_scores[i], ns))
 
     best_ns = noise_list[mean_scores.index(max(mean_scores))]
+    # best_ns = ls_list[mean_scores.index(max(mean_scores))]
     print("best noise = {}".format(best_ns))
 
     gpr = GaussianProcessRegressor(kernel=RBF(length_scale=ls) + WhiteKernel(best_ns), random_state=0).fit(x_train, y_train)
+    # gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ns)).fit(x_train, y_train)
     y_pred_scaled = gpr.predict(x_test)
     # need to rescale since the Gaussian regressor was trained on standardized output (zero mean, unit variance)
     rows, _ = x_test.shape
