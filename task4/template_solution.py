@@ -17,8 +17,9 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 
 from sklearn.datasets import load_iris
-from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF
+from sklearn.gaussian_process.kernels import DotProduct, WhiteKernel
 
 np.random.seed(11234)
 torch.manual_seed(11234)
@@ -54,11 +55,14 @@ class Net(nn.Module):
         super().__init__()
         # todo: Define the architecture of the model. It should be able to be trained on pretraing data 
         # and then used to extract features from the training and test data.
-        embedding_size = 20
+        embedding_size = 8
 
-        self.fc1 = nn.Linear(in_features, 100)
-        self.fc3 = nn.Linear(100, 100)
-        self.fc4 = nn.Linear(100, embedding_size)
+        self.fc1 = nn.Linear(in_features,50)
+        self.fc2a = nn.Linear(50, 50)
+        self.fc2b = nn.Linear(50, embedding_size)
+
+        self.dropout = nn.Dropout(0.5)
+        #self.fc4 = nn.Linear(embedding_size, 50)
 
         self.out = nn.Linear(embedding_size, 1)
 
@@ -77,14 +81,17 @@ class Net(nn.Module):
         # defined in the constructor.
 
         x = self.get_embeddings(x)
+        #x = self.dropout(x)
+        #x = F.relu(self.fc4(x))
         x = self.out(x)
 
         return x
     
     def get_embeddings(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc3(x))
-        x = F.relu(self.fc4(x))
+        
+        x = F.sigmoid(self.fc1(x))
+        x = F.sigmoid(self.fc2a(x))
+        x = F.sigmoid(self.fc2b(x))
 
         return x
     
@@ -122,7 +129,7 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
     valildationLoss = nn.L1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    epochs = 100
+    epochs = 600
     losses = []
 
     for i in range(epochs):
@@ -130,8 +137,8 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
         loss = criterion(y_pred, y_tr)
         losses.append(loss)
 
-        # if(i % 10 == 0):
-        #     print(f'epoch: {i:2}  loss: {loss.item():10.8f}')
+        if(i % 10 == 0):
+            print(f'epoch: {i:2}  loss: {loss.item():10.8f}')
         
         optimizer.zero_grad()
         loss.backward()
@@ -244,34 +251,38 @@ if __name__ == '__main__':
 
     # =========================================================================================================
     # attempt with gaussian kernal, hasn't worked yet
+    print("========= White Kernel =========")
 
-    # kernel = 1.0 * RBF(1.0)
-    # gpc = GaussianProcessClassifier(kernel=kernel, random_state=0).fit(x_embeddings[0:split_K], y_train[0:split_K])
+    for noise_level_local in [5,3,2,1,0.5,0.1,0.05,0.01,0.005,0.001,0.0005]:
+        print("Noise Level:",noise_level_local)
+        #kernel = 1.0 * RBF(1.0)
+        #kernel = DotProduct() + WhiteKernel(noise_level=0.5)
+        kernel = DotProduct() + WhiteKernel(noise_level=noise_level_local)
+
+        gpc = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings[0:split_K], y_train[0:split_K])
 
 
-    # #model.fit(x_embeddings[0:10], y_train[0:10])
+        #model.fit(x_embeddings[0:10], y_train[0:10])
 
-    # print("-- done fitting --")
+        print("  score trained:",1-gpc.score(x_embeddings[0:split_K], y_train[0:split_K]))
+        print("  score unseen: ",1-gpc.score(x_embeddings[split_K:], y_train[split_K:]))
+            
 
-    # print("score trained:",1-gpc.score(x_embeddings[:split_K], y_train[:split_K]))
-    # print("score unseen: ",1-gpc.score(x_embeddings[split_K:], y_train[split_K:]))
-          
+        # train it on the whole set
+        gpc2 = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings, y_train)
 
-    # # train it on the whole set
-    # gpc2 = GaussianProcessClassifier(kernel=kernel, random_state=0).fit(x_embeddings, y_train)
-    # print("score mode2:  ",1-gpc2.score(x_embeddings, y_train))
-    # y_pred = gpc2.predict(np.apply_along_axis(temp, 1, x_test))
+        print("  score mode2:  ",1-gpc2.score(x_embeddings, y_train))
+
+        y_pred = gpc2.predict(np.apply_along_axis(temp, 1, x_test))
 
 
 
     # =========================================================================================================
-
+    print("========= Linear Regression =========")
 
     model = LinearRegression().fit(x_embeddings[0:split_K], y_train[0:split_K])
 
     #model.fit(x_embeddings[0:10], y_train[0:10])
-
-    print("-- done fitting --")
 
     print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
     print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
