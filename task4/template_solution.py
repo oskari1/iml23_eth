@@ -20,9 +20,10 @@ from sklearn.datasets import load_iris
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF
 from sklearn.gaussian_process.kernels import DotProduct, WhiteKernel
+from sklearn.metrics import mean_squared_error
 
-np.random.seed(11234)
-torch.manual_seed(11234)
+np.random.seed(11239)
+torch.manual_seed(11239)
 
 
 def load_data():
@@ -55,7 +56,7 @@ class Net(nn.Module):
         super().__init__()
         # todo: Define the architecture of the model. It should be able to be trained on pretraing data 
         # and then used to extract features from the training and test data.
-        embedding_size = 8
+        embedding_size = 30
 
         self.fc1 = nn.Linear(in_features,50)
         self.fc2a = nn.Linear(50, 50)
@@ -129,7 +130,7 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
     valildationLoss = nn.L1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    epochs = 600
+    epochs = 100
     losses = []
 
     for i in range(epochs):
@@ -251,29 +252,29 @@ if __name__ == '__main__':
 
     # =========================================================================================================
     # attempt with gaussian kernal, hasn't worked yet
-    print("========= White Kernel =========")
+    # print("========= White Kernel =========")
 
-    for noise_level_local in [5,3,2,1,0.5,0.1,0.05,0.01,0.005,0.001,0.0005]:
-        print("Noise Level:",noise_level_local)
-        #kernel = 1.0 * RBF(1.0)
-        #kernel = DotProduct() + WhiteKernel(noise_level=0.5)
-        kernel = DotProduct() + WhiteKernel(noise_level=noise_level_local)
+    # for noise_level_local in [5,3,2,1,0.5,0.1,0.05,0.01,0.005,0.001,0.0005]:
+    #     print("Noise Level:",noise_level_local)
+    #     #kernel = 1.0 * RBF(1.0)
+    #     #kernel = DotProduct() + WhiteKernel(noise_level=0.5)
+    #     kernel = DotProduct() + WhiteKernel(noise_level=noise_level_local)
 
-        gpc = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings[0:split_K], y_train[0:split_K])
+    #     gpc = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings[0:split_K], y_train[0:split_K])
 
 
-        #model.fit(x_embeddings[0:10], y_train[0:10])
+    #     #model.fit(x_embeddings[0:10], y_train[0:10])
 
-        print("  score trained:",1-gpc.score(x_embeddings[0:split_K], y_train[0:split_K]))
-        print("  score unseen: ",1-gpc.score(x_embeddings[split_K:], y_train[split_K:]))
+    #     print("  score trained:",1-gpc.score(x_embeddings[0:split_K], y_train[0:split_K]))
+    #     print("  score unseen: ",1-gpc.score(x_embeddings[split_K:], y_train[split_K:]))
             
 
-        # train it on the whole set
-        gpc2 = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings, y_train)
+    #     # train it on the whole set
+    #     gpc2 = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings, y_train)
 
-        print("  score mode2:  ",1-gpc2.score(x_embeddings, y_train))
+    #     print("  score mode2:  ",1-gpc2.score(x_embeddings, y_train))
 
-        y_pred = gpc2.predict(np.apply_along_axis(temp, 1, x_test))
+    #     y_pred = gpc2.predict(np.apply_along_axis(temp, 1, x_test))
 
 
 
@@ -286,7 +287,9 @@ if __name__ == '__main__':
 
     print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
     print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
-          
+    y_train_pred = model.predict(x_embeddings[split_K:])
+    print("score rmse:   ",mean_squared_error(y_train_pred,y_train[split_K:]))
+
 
     # train it on the whole set
     model2 = LinearRegression().fit(x_embeddings, y_train)
@@ -296,7 +299,31 @@ if __name__ == '__main__':
     # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
     # print(scores)
 
+    # =========================================================================================================
+    print("========= Ridge Regression =========")
+    alpha = 0.5
 
+    model = Ridge(alpha=alpha).fit(x_embeddings[0:split_K], y_train[0:split_K])
+
+    #model.fit(x_embeddings[0:10], y_train[0:10])
+
+    print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
+    print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
+          
+    y_train_pred = model.predict(x_embeddings[split_K:])
+    print("score rmse:   ",mean_squared_error(y_train_pred,y_train[split_K:]))
+
+
+    # train it on the whole set
+    model2 = Ridge(alpha=alpha).fit(x_embeddings, y_train)
+    print("score mode2:  ",1-model2.score(x_embeddings, y_train))
+
+
+
+    y_pred = model2.predict(np.apply_along_axis(temp, 1, x_test))
+
+    # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
+    # print(scores)
 
     print("-- saving the data --")
 
