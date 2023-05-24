@@ -315,8 +315,8 @@ if __name__ == '__main__':
     # plt.show()
 
     # # do Gaussian process regression on extracted features
-    ls_list = [1e-1]
-    ns_list = [0.01,0.04,0.08,0.1]
+    ls_list = [0.1]
+    ns_list = [0.01,0.04,0.07,0.1]
     # ls = np.full((10,), 1e-1) # best length_scale found empirically (only one that converges)
     ls = 1e-1
     k = 5 
@@ -324,8 +324,8 @@ if __name__ == '__main__':
 
     for i, ns in enumerate(ns_list):
         for j, ls in enumerate(ls_list):
-            kernel = RBF(length_scale=ls_list[j]) + WhiteKernel(ns_list[i])
-            # kernel = RBF(length_scale=ls) 
+            # kernel = RBF(length_scale=ls_list[j]) + WhiteKernel(ns_list[i])
+            kernel = RBF(length_scale=ls_list[j]) 
             gpr = GaussianProcessRegressor(kernel=kernel, random_state=0)
             scores = cross_val_score(gpr, x_train, y_train, cv=k)
             gpr = gpr.fit(x_train, y_train) 
@@ -333,18 +333,24 @@ if __name__ == '__main__':
             print("Got mean score of {} for ns = {} and ls = {}".format(mean_scores[i,j], ns, ls))
 
             # plot predictions on test set
+            mean_y_val_pred, std_y_val_pred = gpr.predict(x_val,return_std=True)
+            print("mean_y_val_pred, std_y_val_pred = {}, {}".format(mean_y_val_pred,std_y_val_pred))
             y_val_pred = output_scaler.inverse_transform(gpr.predict(x_val).reshape((x_val.shape[0],1))) 
             plt.plot(range(y_val.size), y_val, label="actual y_val", color="blue")
             plt.plot(range(y_val_pred.size), y_val_pred, label="predicted y_val after", color="red")
+            plt.title("Mean score = {} for ns {} and ls {}".format(mean_scores[i,j],ns,ls))
             plt.xlabel('Index')
             plt.ylabel('y_val')
             plt.legend()
             plt.show()
 
             # plot predictions on train set
+            mean_y_train_pred, std_y_train_pred = gpr.predict(x_train,return_std=True)
+            print("mean_y_train_pred, std_y_train_pred = {}, {}".format(mean_y_train_pred,std_y_train_pred))
             y_train_pred = output_scaler.inverse_transform(gpr.predict(x_train).reshape((x_train.shape[0],1))) 
             plt.plot(range(y_train.size), output_scaler.inverse_transform(y_train.reshape((rows,1))), label="actual y_train", color="blue")
             plt.plot(range(y_train_pred.size), y_train_pred, label="predicted y_train", color="red")
+            plt.title("Mean score = {} for ns {} and ls {}".format(mean_scores[i,j],ns,ls))
             plt.xlabel('Index')
             plt.ylabel('y_train')
             plt.legend()
