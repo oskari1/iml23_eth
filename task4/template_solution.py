@@ -22,8 +22,8 @@ from sklearn.gaussian_process.kernels import RBF
 from sklearn.gaussian_process.kernels import DotProduct, WhiteKernel
 from sklearn.metrics import mean_squared_error
 
-np.random.seed(11239)
-torch.manual_seed(11239)
+np.random.seed(51239)
+torch.manual_seed(51239)
 
 
 def load_data():
@@ -56,13 +56,13 @@ class Net(nn.Module):
         super().__init__()
         # todo: Define the architecture of the model. It should be able to be trained on pretraing data 
         # and then used to extract features from the training and test data.
-        embedding_size = 30
+        embedding_size = 10
 
         self.fc1 = nn.Linear(in_features,50)
         self.fc2a = nn.Linear(50, 50)
         self.fc2b = nn.Linear(50, embedding_size)
 
-        self.dropout = nn.Dropout(0.5)
+        #self.dropout = nn.Dropout(0.5)
         #self.fc4 = nn.Linear(embedding_size, 50)
 
         self.out = nn.Linear(embedding_size, 1)
@@ -108,7 +108,7 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
             
     output: make_features: function, a function which can be used to extract features from the training and test data
     """
-    print("-- in make_feature_extractor --")
+    #print("-- in make_feature_extractor --")
 
     # Pretraining data loading
     in_features = x.shape[-1]
@@ -139,7 +139,8 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
         losses.append(loss)
 
         if(i % 10 == 0):
-            print(f'epoch: {i:2}  loss: {loss.item():10.8f}')
+            #print(f'epoch: {i:2}  loss: {loss.item():10.8f}')
+            pass
         
         optimizer.zero_grad()
         loss.backward()
@@ -209,21 +210,12 @@ def get_regression_model():
 
     return model
 
-# Main function. You don't have to change this
-if __name__ == '__main__':
-    print("-- starting in main --")
-    # Load data
-    x_pretrain, y_pretrain, x_train, y_train, x_test = load_data()
-    print("-- data loaded! --")
-
-    # Shapes: (05k, 1k) (50k) train: (100, 1k) (100) (10k, 1k)
-
-
-    # Utilize pretraining data by creating feature extractor which extracts lumo energy 
+def run_program(x_pretrain, y_pretrain, x_train, y_train, x_test):
+      # Utilize pretraining data by creating feature extractor which extracts lumo energy 
     # features from available initial features
     feature_extractor =  make_feature_extractor(x_pretrain, y_pretrain)
 
-    print("-- features extractor done --")
+    #print("-- features extractor done --")
 
     PretrainedFeatureClass = make_pretraining_class({"pretrain": feature_extractor})
     
@@ -235,7 +227,7 @@ if __name__ == '__main__':
     # TODO: Implement the pipeline. It should contain feature extraction and regression. You can optionally
     # use other sklearn tools, such as StandardScaler, FunctionTransformer, etc.
 
-    print("-- fitting part II --")
+    #print("-- fitting part II --")
 
 
     def temp(x):
@@ -279,44 +271,44 @@ if __name__ == '__main__':
 
 
     # =========================================================================================================
-    print("========= Linear Regression =========")
+    # print("========= Linear Regression =========")
 
-    model = LinearRegression().fit(x_embeddings[0:split_K], y_train[0:split_K])
+    # model = LinearRegression().fit(x_embeddings[0:split_K], y_train[0:split_K])
 
-    #model.fit(x_embeddings[0:10], y_train[0:10])
+    # #model.fit(x_embeddings[0:10], y_train[0:10])
 
-    print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
-    print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
-    y_train_pred = model.predict(x_embeddings[split_K:])
-    print("score rmse:   ",mean_squared_error(y_train_pred,y_train[split_K:]))
+    # print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
+    # print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
+    # y_train_pred = model.predict(x_embeddings[split_K:])
+    # print("score rmse:   ",mean_squared_error(y_train_pred,y_train[split_K:]))
 
 
-    # train it on the whole set
-    model2 = LinearRegression().fit(x_embeddings, y_train)
-    print("score mode2:  ",1-model2.score(x_embeddings, y_train))
-    y_pred = model2.predict(np.apply_along_axis(temp, 1, x_test))
+    # # train it on the whole set
+    # model2 = LinearRegression().fit(x_embeddings, y_train)
+    # print("score mode2:  ",1-model2.score(x_embeddings, y_train))
+    # y_pred = model2.predict(np.apply_along_axis(temp, 1, x_test))
 
-    # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
-    # print(scores)
+    # # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
+    # # print(scores)
 
     # =========================================================================================================
-    print("========= Ridge Regression =========")
+    #print("========= Ridge Regression =========")
     alpha = 0.5
 
     model = Ridge(alpha=alpha).fit(x_embeddings[0:split_K], y_train[0:split_K])
 
     #model.fit(x_embeddings[0:10], y_train[0:10])
 
-    print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
-    print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
+    #print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
+    #print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
           
-    y_train_pred = model.predict(x_embeddings[split_K:])
-    print("score rmse:   ",mean_squared_error(y_train_pred,y_train[split_K:]))
+    y_train_pred = model.predict(x_embeddings[:split_K])
+    print("score rmse:   ",mean_squared_error(y_train[:split_K],y_train_pred, squared=False))
 
 
     # train it on the whole set
     model2 = Ridge(alpha=alpha).fit(x_embeddings, y_train)
-    print("score mode2:  ",1-model2.score(x_embeddings, y_train))
+    #print("score mode2:  ",1-model2.score(x_embeddings, y_train))
 
 
 
@@ -324,6 +316,25 @@ if __name__ == '__main__':
 
     # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
     # print(scores)
+    return y_pred
+
+
+
+# Main function. You don't have to change this
+if __name__ == '__main__':
+    print("-- starting in main --")
+    # Load data
+    x_pretrain, y_pretrain, x_train, y_train, x_test = load_data()
+    print("-- data loaded! --")
+
+    # Shapes: (05k, 1k) (50k) train: (100, 1k) (100) (10k, 1k)
+
+
+
+    y_pred = []
+    for i in range(0,100):
+        torch.manual_seed(1234+i)
+        y_pred = run_program(x_pretrain, y_pretrain, x_train, y_train, x_test)
 
     print("-- saving the data --")
 
