@@ -59,7 +59,7 @@ class Net(nn.Module):
         embedding_size = 10
 
         self.fc1 = nn.Linear(in_features,50)
-        self.fc2a = nn.Linear(50, 50)
+        #self.fc2a = nn.Linear(50, 50)
         self.fc2b = nn.Linear(50, embedding_size)
 
         #self.dropout = nn.Dropout(0.5)
@@ -90,9 +90,9 @@ class Net(nn.Module):
     
     def get_embeddings(self, x):
         
-        x = F.sigmoid(self.fc1(x))
-        x = F.sigmoid(self.fc2a(x))
-        x = F.sigmoid(self.fc2b(x))
+        x = F.elu(self.fc1(x))
+        #x = F.elu(self.fc2a(x))
+        x = F.elu(self.fc2b(x))
 
         return x
     
@@ -126,11 +126,11 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
     # to monitor the loss.
 
     # === Training the Model ===
-    criterion = nn.L1Loss()
-    valildationLoss = nn.L1Loss()
+    criterion = nn.MSELoss()
+    valildationLoss = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    epochs = 100
+    epochs = 1500
     losses = []
 
     for i in range(epochs):
@@ -139,7 +139,7 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
         losses.append(loss)
 
         if(i % 10 == 0):
-            #print(f'epoch: {i:2}  loss: {loss.item():10.8f}')
+            print(f'epoch: {i:2}  loss: {loss.item():10.8f}')
             pass
         
         optimizer.zero_grad()
@@ -151,7 +151,8 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
         #     print(f"\t\tWe have a loss of {valildationLoss(y_pred_test, y_val):10.8f}")
 
 
-    print(f"\t\tWe have a loss of {valildationLoss(y_pred_test, y_val):10.8f}")
+    current_loss = valildationLoss(y_pred_test, y_val)
+    print(f"\t\tWe have a loss of {current_loss:10.8f}")
 
     def make_features(x):
         """
@@ -167,7 +168,7 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
         # todo: Implement the feature extraction, a part of a pretrained model used later in the pipeline.
         return model.get_embeddings(x)
 
-    return make_features
+    return make_features, current_loss
 
 def make_pretraining_class(feature_extractors):
     """
@@ -213,7 +214,7 @@ def get_regression_model():
 def run_program(x_pretrain, y_pretrain, x_train, y_train, x_test):
       # Utilize pretraining data by creating feature extractor which extracts lumo energy 
     # features from available initial features
-    feature_extractor =  make_feature_extractor(x_pretrain, y_pretrain)
+    feature_extractor, nn_loss =  make_feature_extractor(x_pretrain, y_pretrain)
 
     #print("-- features extractor done --")
 
@@ -241,82 +242,90 @@ def run_program(x_pretrain, y_pretrain, x_train, y_train, x_test):
     #model = HuberRegressor(alpha=1, max_iter = 1000, epsilon=1) #TODO, this could be better
     split_K = 80
 
-
+    """
     # =========================================================================================================
-    # attempt with gaussian kernal, hasn't worked yet
-    # print("========= White Kernel =========")
+    #attempt with gaussian kernal, hasn't worked yet
+    print("========= White Kernel =========")
 
-    # for noise_level_local in [5,3,2,1,0.5,0.1,0.05,0.01,0.005,0.001,0.0005]:
-    #     print("Noise Level:",noise_level_local)
-    #     #kernel = 1.0 * RBF(1.0)
-    #     #kernel = DotProduct() + WhiteKernel(noise_level=0.5)
-    #     kernel = DotProduct() + WhiteKernel(noise_level=noise_level_local)
+    #for noise_level_local in [5,3,2,1,0.5,0.1,0.05,0.01,0.005,0.001,0.0005]:
+    for noise_level_local in [1,0.5,0.1,0.05,0.01]:
+        #print("Noise Level:",noise_level_local)
+        #kernel = 1.0 * RBF(1.0)
+        #kernel = DotProduct() + WhiteKernel(noise_level=0.5)
+        kernel = DotProduct() + WhiteKernel(noise_level=noise_level_local)
 
-    #     gpc = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings[0:split_K], y_train[0:split_K])
+        gpc = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings[0:split_K], y_train[0:split_K])
 
 
-    #     #model.fit(x_embeddings[0:10], y_train[0:10])
+        #model.fit(x_embeddings[0:10], y_train[0:10])
+        y_train_pred = gpc.predict(x_embeddings[:split_K])
+        print("white noise:",noise_level_local,"->",mean_squared_error(y_train[:split_K],y_train_pred, squared=False))
 
-    #     print("  score trained:",1-gpc.score(x_embeddings[0:split_K], y_train[0:split_K]))
-    #     print("  score unseen: ",1-gpc.score(x_embeddings[split_K:], y_train[split_K:]))
+
+        # print("  score trained:",1-gpc.score(x_embeddings[0:split_K], y_train[0:split_K]))
+        # print("  score unseen: ",1-gpc.score(x_embeddings[split_K:], y_train[split_K:]))
             
 
-    #     # train it on the whole set
-    #     gpc2 = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings, y_train)
+        # train it on the whole set
+        gpc2 = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_embeddings, y_train)
 
-    #     print("  score mode2:  ",1-gpc2.score(x_embeddings, y_train))
+        #print("  score mode2:  ",1-gpc2.score(x_embeddings, y_train))
 
-    #     y_pred = gpc2.predict(np.apply_along_axis(temp, 1, x_test))
-
-
-
-    # =========================================================================================================
-    # print("========= Linear Regression =========")
-
-    # model = LinearRegression().fit(x_embeddings[0:split_K], y_train[0:split_K])
-
-    # #model.fit(x_embeddings[0:10], y_train[0:10])
-
-    # print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
-    # print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
-    # y_train_pred = model.predict(x_embeddings[split_K:])
-    # print("score rmse:   ",mean_squared_error(y_train_pred,y_train[split_K:]))
+        y_pred = gpc2.predict(np.apply_along_axis(temp, 1, x_test))
 
 
-    # # train it on the whole set
-    # model2 = LinearRegression().fit(x_embeddings, y_train)
-    # print("score mode2:  ",1-model2.score(x_embeddings, y_train))
-    # y_pred = model2.predict(np.apply_along_axis(temp, 1, x_test))
-
-    # # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
-    # # print(scores)
 
     # =========================================================================================================
-    #print("========= Ridge Regression =========")
-    alpha = 0.5
+    print("========= Linear Regression =========")
 
-    model = Ridge(alpha=alpha).fit(x_embeddings[0:split_K], y_train[0:split_K])
+    model = LinearRegression().fit(x_embeddings[0:split_K], y_train[0:split_K])
 
     #model.fit(x_embeddings[0:10], y_train[0:10])
 
     #print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
     #print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
-          
+    y_train_pred = model.predict(x_embeddings[split_K:])
+    #print("score rmse:   ",mean_squared_error(y_train_pred,y_train[split_K:]))
+
     y_train_pred = model.predict(x_embeddings[:split_K])
-    print("score rmse:   ",mean_squared_error(y_train[:split_K],y_train_pred, squared=False))
+    print("score rmse linear ->",mean_squared_error(y_train[:split_K],y_train_pred, squared=False))
 
 
     # train it on the whole set
-    model2 = Ridge(alpha=alpha).fit(x_embeddings, y_train)
+    model2 = LinearRegression().fit(x_embeddings, y_train)
     #print("score mode2:  ",1-model2.score(x_embeddings, y_train))
-
-
-
     y_pred = model2.predict(np.apply_along_axis(temp, 1, x_test))
 
     # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
     # print(scores)
-    return y_pred
+    """
+    # =========================================================================================================
+    #print("========= Ridge Regression =========")
+    for alpha in [0.001]:
+        #alpha = 0.5
+
+        model = Ridge(alpha=alpha).fit(x_embeddings[0:split_K], y_train[0:split_K])
+
+        #model.fit(x_embeddings[0:10], y_train[0:10])
+
+        #print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
+        #print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
+            
+        y_train_pred = model.predict(x_embeddings[:split_K])
+        print("score rmse ridge a=",alpha,"->",mean_squared_error(y_train[:split_K],y_train_pred, squared=False))
+
+
+        # train it on the whole set
+        model2 = Ridge(alpha=alpha).fit(x_embeddings, y_train)
+        #print("score mode2:  ",1-model2.score(x_embeddings, y_train))
+
+
+
+        y_pred = model2.predict(np.apply_along_axis(temp, 1, x_test))
+
+    # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
+    # print(scores)
+    return y_pred, nn_loss
 
 
 
@@ -330,11 +339,16 @@ if __name__ == '__main__':
     # Shapes: (05k, 1k) (50k) train: (100, 1k) (100) (10k, 1k)
 
 
+    min_loss = 1000
 
     y_pred = []
-    for i in range(0,100):
+    for i in range(0,1):
         torch.manual_seed(1234+i)
-        y_pred = run_program(x_pretrain, y_pretrain, x_train, y_train, x_test)
+        y_pred_local, loss = run_program(x_pretrain, y_pretrain, x_train, y_train, x_test)
+        if(loss < min_loss):
+            print("new minimum loss!")
+            min_loss = loss
+            y_pred = y_pred_local
 
     print("-- saving the data --")
 
