@@ -90,7 +90,7 @@ class Net(nn.Module):
         x = self.relu3(self.fc3(x))
         return x
     
-def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
+def make_feature_extractor(x, y, batch_size=64, eval_size=10000):
     """
     This function trains the feature extractor on the pretraining data and returns a function which
     can be used to extract features from the training and test data.
@@ -146,10 +146,10 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     # === Training the Model ===
     criterion = nn.SmoothL1Loss()
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001) 
 
     # epochs = 5 
-    epochs = 4 
+    epochs = 3 # best 4 
     # epochs = 20 
     tr_losses = [0.]*epochs
     val_losses = [0.]*epochs
@@ -290,7 +290,7 @@ if __name__ == '__main__':
     # print("x_train after extracting features")
     # print(x_train[0,:])
 
-    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=30, random_state=0, shuffle=True)
+    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=20, random_state=0, shuffle=True)
     # print("x_pretrain:")
     # print(x_tr[0,:])
     # x_val = x_train
