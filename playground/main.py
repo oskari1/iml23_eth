@@ -60,7 +60,7 @@ class Net(nn.Module):
         self.in_features = in_features
         embedding_size = 10 
         hidden1 = 500 # 400 is also good but down the pipeline GPR becomes more sensitive to noise
-        hidden2 = 100 # 400 is also good but down the pipeline GPR becomes more sensitive to noise
+        hidden2 = 50 
         self.fc1 = nn.Linear(in_features,hidden1) 
         self.relu1 = nn.ReLU()
         self.fc2 = nn.Linear(hidden1, hidden2)
@@ -144,7 +144,7 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     # to monitor the loss.
 
     # === Training the Model ===
-    criterion = nn.MSELoss()
+    criterion = nn.SmoothL1Loss()
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
