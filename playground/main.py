@@ -297,15 +297,19 @@ if __name__ == '__main__':
     # normalize embedded data (again, recommended for GPR)
     GPR_input_scaler = preprocessing.StandardScaler().fit(x_train)
     old_y_train_shape = y_train.shape
+    old_y_val_shape = y_val.shape
     x_train = GPR_input_scaler.transform(x_train)
     # print("x_train after extracting features AND after scaling")
     # print(x_train[0,:])
     x_test = GPR_input_scaler.transform(x_test)
     x_val = GPR_input_scaler.transform(x_val)
     rows, _ = x_train.shape
+    rows_val, _ = x_val.shape
     y_train_reshaped = y_train.reshape((rows, 1))
+    y_val_reshaped = y_val.reshape((rows_val, 1))
     output_scaler = preprocessing.StandardScaler().fit(y_train_reshaped) 
     y_train = output_scaler.transform(y_train_reshaped).reshape(old_y_train_shape)
+    y_val = output_scaler.transform(y_val_reshaped).reshape(old_y_val_shape)
 
     # plt.hist(y_train, bins='auto', color='red', alpha=0.7, rwidth=0.85)
     # plt.grid(axis='y', alpha=0.5)
@@ -324,8 +328,8 @@ if __name__ == '__main__':
 
     for i, ns in enumerate(ns_list):
         for j, ls in enumerate(ls_list):
-            # kernel = RBF(length_scale=ls_list[j]) + WhiteKernel(ns_list[i])
-            kernel = RBF(length_scale=ls_list[j]) 
+            kernel = RBF(length_scale=ls_list[j]) + WhiteKernel(ns_list[i])
+            # kernel = RBF(length_scale=ls_list[j]) 
             gpr = GaussianProcessRegressor(kernel=kernel, random_state=0)
             scores = cross_val_score(gpr, x_train, y_train, cv=k)
             gpr = gpr.fit(x_train, y_train) 
@@ -333,11 +337,16 @@ if __name__ == '__main__':
             print("Got mean score of {} for ns = {} and ls = {}".format(mean_scores[i,j], ns, ls))
 
             # plot predictions on test set
-            mean_y_val_pred, std_y_val_pred = gpr.predict(x_val,return_std=True)
-            print("mean_y_val_pred, std_y_val_pred = {}, {}".format(mean_y_val_pred,std_y_val_pred))
-            y_val_pred = output_scaler.inverse_transform(gpr.predict(x_val).reshape((x_val.shape[0],1))) 
+            y_val_pred, std_y_val_pred = gpr.predict(x_val,return_std=True)
             plt.plot(range(y_val.size), y_val, label="actual y_val", color="blue")
             plt.plot(range(y_val_pred.size), y_val_pred, label="predicted y_val after", color="red")
+            plt.fill_between(
+                range(y_val.size),
+                y_val_pred - std_y_val_pred,
+                y_val_pred + std_y_val_pred,
+                color="tab:red",
+                alpha=0.2,
+            )
             plt.title("Mean score = {} for ns {} and ls {}".format(mean_scores[i,j],ns,ls))
             plt.xlabel('Index')
             plt.ylabel('y_val')
@@ -345,11 +354,16 @@ if __name__ == '__main__':
             plt.show()
 
             # plot predictions on train set
-            mean_y_train_pred, std_y_train_pred = gpr.predict(x_train,return_std=True)
-            print("mean_y_train_pred, std_y_train_pred = {}, {}".format(mean_y_train_pred,std_y_train_pred))
-            y_train_pred = output_scaler.inverse_transform(gpr.predict(x_train).reshape((x_train.shape[0],1))) 
-            plt.plot(range(y_train.size), output_scaler.inverse_transform(y_train.reshape((rows,1))), label="actual y_train", color="blue")
+            y_train_pred, std_y_train_pred = gpr.predict(x_train,return_std=True)
+            plt.plot(range(y_train.size), y_train, label="actual y_train", color="blue")
             plt.plot(range(y_train_pred.size), y_train_pred, label="predicted y_train", color="red")
+            plt.fill_between(
+                range(y_train.size),
+                y_train_pred - std_y_train_pred,
+                y_train_pred + std_y_train_pred,
+                color="tab:red",
+                alpha=0.2,
+            )
             plt.title("Mean score = {} for ns {} and ls {}".format(mean_scores[i,j],ns,ls))
             plt.xlabel('Index')
             plt.ylabel('y_train')
