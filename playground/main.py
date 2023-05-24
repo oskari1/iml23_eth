@@ -60,10 +60,13 @@ class Net(nn.Module):
         self.in_features = in_features
         embedding_size = 10 
         hidden1 = 500 # 400 is also good but down the pipeline GPR becomes more sensitive to noise
+        hidden2 = 100 # 400 is also good but down the pipeline GPR becomes more sensitive to noise
         self.fc1 = nn.Linear(in_features,hidden1) 
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(hidden1, embedding_size)
+        self.fc2 = nn.Linear(hidden1, hidden2)
         self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(hidden2, embedding_size)
+        self.relu3 = nn.ReLU()
         self.out = nn.Linear(embedding_size, 1)
 
     def forward(self, x):
@@ -84,6 +87,7 @@ class Net(nn.Module):
     def get_embeddings(self, x):
         x = self.relu1(self.fc1(x))
         x = self.relu2(self.fc2(x))
+        x = self.relu3(self.fc3(x))
         return x
     
 def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
@@ -142,10 +146,10 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=10000):
     # === Training the Model ===
     criterion = nn.MSELoss()
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
     # epochs = 5 
-    epochs = 5 
+    epochs = 4 
     # epochs = 20 
     tr_losses = [0.]*epochs
     val_losses = [0.]*epochs
