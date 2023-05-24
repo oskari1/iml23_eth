@@ -58,8 +58,8 @@ class Net(nn.Module):
         # TODO: Define the architecture of the model. It should be able to be trained on pretraing data 
         # and then used to extract features from the training and test data.
         self.in_features = in_features
-        embedding_size = 10
-        hidden1 = 400
+        embedding_size = 10 
+        hidden1 = 500 # 400 is also good but down the pipeline GPR becomes more sensitive to noise
         self.fc1 = nn.Linear(in_features,hidden1) 
         self.relu1 = nn.ReLU()
         self.fc2 = nn.Linear(hidden1, embedding_size)
@@ -316,7 +316,7 @@ if __name__ == '__main__':
 
     # # do Gaussian process regression on extracted features
     ls_list = [1e-1]
-    ns_list = [1e-1, 1e-2, 1e-3, 1e-4]
+    ns_list = [0.01,0.04,0.08,0.1]
     # ls = np.full((10,), 1e-1) # best length_scale found empirically (only one that converges)
     ls = 1e-1
     k = 5 
@@ -326,11 +326,11 @@ if __name__ == '__main__':
         for j, ls in enumerate(ls_list):
             kernel = RBF(length_scale=ls_list[j]) + WhiteKernel(ns_list[i])
             # kernel = RBF(length_scale=ls) 
-            # gpr = GaussianProcessRegressor(kernel=kernel, random_state=0)
-            # scores = cross_val_score(gpr, x_train, y_train, cv=k)
-            gpr = GaussianProcessRegressor(kernel=kernel, random_state=0).fit(x_train, y_train) 
-            # mean_scores[i,j] = scores.mean()
-            # print("Got mean score of {} for ns = {} and ls = {}".format(mean_scores[i,j], ns, ls))
+            gpr = GaussianProcessRegressor(kernel=kernel, random_state=0)
+            scores = cross_val_score(gpr, x_train, y_train, cv=k)
+            gpr = gpr.fit(x_train, y_train) 
+            mean_scores[i,j] = scores.mean()
+            print("Got mean score of {} for ns = {} and ls = {}".format(mean_scores[i,j], ns, ls))
 
             # plot predictions on test set
             y_val_pred = output_scaler.inverse_transform(gpr.predict(x_val).reshape((x_val.shape[0],1))) 
@@ -343,8 +343,6 @@ if __name__ == '__main__':
 
             # plot predictions on train set
             y_train_pred = output_scaler.inverse_transform(gpr.predict(x_train).reshape((x_train.shape[0],1))) 
-            print("y_train.shape: ")
-            print(y_train.shape)
             plt.plot(range(y_train.size), output_scaler.inverse_transform(y_train.reshape((rows,1))), label="actual y_train", color="blue")
             plt.plot(range(y_train_pred.size), y_train_pred, label="predicted y_train", color="red")
             plt.xlabel('Index')
