@@ -56,11 +56,12 @@ class Net(nn.Module):
         super().__init__()
         # todo: Define the architecture of the model. It should be able to be trained on pretraing data 
         # and then used to extract features from the training and test data.
-        embedding_size = 10
+        embedding_size = 100
 
-        self.fc1 = nn.Linear(in_features,50)
-        #self.fc2a = nn.Linear(50, 50)
-        self.fc2b = nn.Linear(50, embedding_size)
+        self.fc1 = nn.Linear(in_features,100)
+        self.fc2a = nn.Linear(100, 100)
+        self.fc2b = nn.Linear(100, embedding_size)
+        self.dropout = nn.Dropout(0.1)
 
         #self.dropout = nn.Dropout(0.5)
         #self.fc4 = nn.Linear(embedding_size, 50)
@@ -82,6 +83,7 @@ class Net(nn.Module):
         # defined in the constructor.
 
         x = self.get_embeddings(x)
+        x = self.dropout(x)
         #x = self.dropout(x)
         #x = F.relu(self.fc4(x))
         x = self.out(x)
@@ -91,7 +93,7 @@ class Net(nn.Module):
     def get_embeddings(self, x):
         
         x = F.elu(self.fc1(x))
-        #x = F.elu(self.fc2a(x))
+        x = F.elu(self.fc2a(x))
         x = F.elu(self.fc2b(x))
 
         return x
@@ -130,7 +132,7 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
     valildationLoss = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    epochs = 1500
+    epochs = 300
     losses = []
 
     for i in range(epochs):
@@ -147,8 +149,8 @@ def make_feature_extractor(x, y, batch_size=256, eval_size=1000):
         optimizer.step()
 
         y_pred_test = model.forward(x_val).squeeze()
-        # if(i % 10 == 0):
-        #     print(f"\t\tWe have a loss of {valildationLoss(y_pred_test, y_val):10.8f}")
+        if(i % 50 == 0):
+            print(f"\t\tWe have a loss of {valildationLoss(y_pred_test, y_val):10.8f}")
 
 
     current_loss = valildationLoss(y_pred_test, y_val)
@@ -276,6 +278,7 @@ def run_program(x_pretrain, y_pretrain, x_train, y_train, x_test):
 
 
     # =========================================================================================================
+    """
     print("========= Linear Regression =========")
 
     model = LinearRegression().fit(x_embeddings[0:split_K], y_train[0:split_K])
@@ -284,11 +287,11 @@ def run_program(x_pretrain, y_pretrain, x_train, y_train, x_test):
 
     #print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
     #print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
-    y_train_pred = model.predict(x_embeddings[split_K:])
+    #y_train_pred = model.predict(x_embeddings[split_K:])
     #print("score rmse:   ",mean_squared_error(y_train_pred,y_train[split_K:]))
 
-    y_train_pred = model.predict(x_embeddings[:split_K])
-    print("score rmse linear ->",mean_squared_error(y_train[:split_K],y_train_pred, squared=False))
+    y_train_pred = model.predict(x_embeddings[split_K:])
+    print("score rmse linear ->",mean_squared_error(y_train[split_K:],y_train_pred, squared=False))
 
 
     # train it on the whole set
@@ -298,10 +301,12 @@ def run_program(x_pretrain, y_pretrain, x_train, y_train, x_test):
 
     # scores = cross_val_score(model, x_embeddings, y_train, scoring="neg_mean_squared_error", cv=10)
     # print(scores)
-    """
+    
     # =========================================================================================================
     #print("========= Ridge Regression =========")
-    for alpha in [0.001]:
+    #for alpha in [1,0.5,0.1,0.05,0.01,0.005,0.001]:
+    for alpha in [0.01]:
+    
         #alpha = 0.5
 
         model = Ridge(alpha=alpha).fit(x_embeddings[0:split_K], y_train[0:split_K])
@@ -311,8 +316,8 @@ def run_program(x_pretrain, y_pretrain, x_train, y_train, x_test):
         #print("score trained:",1-model.score(x_embeddings[:split_K], y_train[:split_K]))
         #print("score unseen: ",1-model.score(x_embeddings[split_K:], y_train[split_K:]))
             
-        y_train_pred = model.predict(x_embeddings[:split_K])
-        print("score rmse ridge a=",alpha,"->",mean_squared_error(y_train[:split_K],y_train_pred, squared=False))
+        y_train_pred = model.predict(x_embeddings[split_K:])
+        print("score rmse ridge a=",alpha,"->",mean_squared_error(y_train[split_K:],y_train_pred, squared=False))
 
 
         # train it on the whole set
@@ -356,3 +361,9 @@ if __name__ == '__main__':
     y_pred = pd.DataFrame({"y": y_pred}, index=x_test.index)
     y_pred.to_csv("results.csv", index_label="Id")
     print("Predictions saved, all done!")
+
+
+    y_best = pd.read_csv("results-best.csv", index_col="Id").to_numpy()
+
+    # sanity check to previous best submitted result
+    print("mse to best subbision so far: ", mean_squared_error(y_best, y_pred, squared=False))
