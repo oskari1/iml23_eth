@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 import pandas as pd
 import numpy as np
 from sklearn import preprocessing
+from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import StandardScaler 
 import torch
 import torch.nn as nn
@@ -14,7 +15,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import torch.nn.functional as F
 
 from sklearn.linear_model import Ridge, HuberRegressor
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold, cross_val_score
 from sklearn.linear_model import LinearRegression
 
 from sklearn.model_selection import train_test_split
@@ -90,7 +91,7 @@ class Net(nn.Module):
         x = self.relu3(self.fc3(x))
         return x
     
-def make_feature_extractor(x, y, batch_size=64, eval_size=10000):
+def make_feature_extractor(x, y, batch_size=64, eval_size=1000):
     """
     This function trains the feature extractor on the pretraining data and returns a function which
     can be used to extract features from the training and test data.
@@ -253,6 +254,30 @@ def get_regression_model():
     model = HuberRegressor(alpha=1, max_iter = 1000, epsilon=1) #TODO, this could be better
     return model
 
+def calculate_RMSE(w, X, y):
+    """This function takes test data points (X and y), and computes the empirical RMSE of 
+    predicting y from X using a linear model with weights w. 
+
+    Parameters
+    ----------
+    w: array of floats: dim = (13,), optimal parameters of ridge regression 
+    X: matrix of floats, dim = (15,13), inputs with 13 features
+    y: array of floats, dim = (15,), input labels
+
+    Returns
+    ----------
+    RMSE: float: dim = 1, RMSE value
+    """
+    RMSE = 0
+    # TODO: Enter your code here
+    y_pred = X.dot(w)
+    mean = np.mean(y_pred)
+    y_pred = -(y_pred - mean) + mean 
+    RMSE = mean_squared_error(y, y_pred)**0.5
+    # END
+    assert np.isscalar(RMSE)
+    return RMSE
+
 # Main function. You don't have to change this
 if __name__ == '__main__':
     print("-- starting in main --")
@@ -290,7 +315,56 @@ if __name__ == '__main__':
     # print("x_train after extracting features")
     # print(x_train[0,:])
 
-    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=20, random_state=0, shuffle=True)
+    # x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=20, random_state=0, shuffle=True)
+    
+    # attempt with Ridge regression
+    lambdas = [0.001,0.01,0.1,1,10,100]
+    n_folds = 5
+    RMSE_mat = np.zeros((len(lambdas), n_folds))
+    kf = KFold(n_splits=n_folds)
+    for i, lam in enumerate(lambdas):
+        for j, (train, test) in enumerate(kf.split(x_train)):
+            x_tr, y_tr = x_train[train,:],y_train[train]
+            x_val, y_val = x_train[test,:],y_train[test]
+            w_opt = Ridge(alpha=lam, fit_intercept=False).fit(x_tr,y_tr).coef_
+            RMSE_mat[i,j] = calculate_RMSE(w_opt, x_val,y_val)
+
+            # # plot predictions on test set
+            # y_val_pred = x_val.dot(w_opt)
+            # mean = np.mean(y_val_pred)
+            # y_val_pred = -(y_val_pred - mean) + mean
+            # plt.plot(range(y_val.size), y_val, label="actual y_val", color="blue")
+            # plt.plot(range(y_val_pred.size), y_val_pred, label="predicted y_val after", color="red")
+            # plt.xlabel('Index')
+            # plt.ylabel('y_val')
+            # plt.title("Using lam = {}".format(lam))
+            # plt.legend()
+            # plt.show()
+
+        w_opt = Ridge(alpha=lam, fit_intercept=False).fit(x_train,y_train).coef_
+        # plot predictions on train set
+        y_tr_pred = x_train.dot(w_opt)
+        mean = np.mean(y_tr_pred)
+        y_tr_pred = -(y_tr_pred - mean) + mean
+        plt.plot(range(y_train.size), y_train, label="actual y_train", color="blue")
+        plt.plot(range(y_tr_pred.size), y_tr_pred, label="predicted y_train", color="red")
+        plt.xlabel('Index')
+        plt.ylabel('y_train')
+        plt.title("Using lam = {}".format(lam))
+        plt.legend()
+        plt.show()
+
+        mean_RMSE = np.mean(RMSE_mat[i,:])
+        print("Got mean RMSE of {} for lambda = {}".format(mean_RMSE, lam))
+    
+    # extract best lambda and apply Ridge regr with that lambda on whole training data
+    mean_RMSE_per_lam = np.mean(RMSE_mat, axis=1)
+    best_lam = lambdas[np.argmin(mean_RMSE_per_lam)]
+    w_best = Ridge(alpha=best_lam, fit_intercept=False).fit(x_train,y_train).coef_ 
+    y_pred = x_test.dot(w_best)
+    mean = np.mean(y_pred)
+    y_pred = -(y_pred - mean) + mean
+
     # print("x_pretrain:")
     # print(x_tr[0,:])
     # x_val = x_train
@@ -299,96 +373,96 @@ if __name__ == '__main__':
     # subset_indices = np.array(range(len(y_train)))
 
     # normalize embedded data (again, recommended for GPR)
-    GPR_input_scaler = preprocessing.StandardScaler().fit(x_train)
-    old_y_train_shape = y_train.shape
-    old_y_val_shape = y_val.shape
-    x_train = GPR_input_scaler.transform(x_train)
-    # print("x_train after extracting features AND after scaling")
-    # print(x_train[0,:])
-    x_test = GPR_input_scaler.transform(x_test)
-    x_val = GPR_input_scaler.transform(x_val)
-    rows, _ = x_train.shape
-    rows_val, _ = x_val.shape
-    y_train_reshaped = y_train.reshape((rows, 1))
-    y_val_reshaped = y_val.reshape((rows_val, 1))
-    output_scaler = preprocessing.StandardScaler().fit(y_train_reshaped) 
-    y_train = output_scaler.transform(y_train_reshaped).reshape(old_y_train_shape)
-    y_val = output_scaler.transform(y_val_reshaped).reshape(old_y_val_shape)
+    # GPR_input_scaler = preprocessing.StandardScaler().fit(x_train)
+    # old_y_train_shape = y_train.shape
+    # old_y_val_shape = y_val.shape
+    # x_train = GPR_input_scaler.transform(x_train)
+    # # print("x_train after extracting features AND after scaling")
+    # # print(x_train[0,:])
+    # x_test = GPR_input_scaler.transform(x_test)
+    # x_val = GPR_input_scaler.transform(x_val)
+    # rows, _ = x_train.shape
+    # rows_val, _ = x_val.shape
+    # y_train_reshaped = y_train.reshape((rows, 1))
+    # y_val_reshaped = y_val.reshape((rows_val, 1))
+    # output_scaler = preprocessing.StandardScaler().fit(y_train_reshaped) 
+    # y_train = output_scaler.transform(y_train_reshaped).reshape(old_y_train_shape)
+    # y_val = output_scaler.transform(y_val_reshaped).reshape(old_y_val_shape)
 
-    # plt.hist(y_train, bins='auto', color='red', alpha=0.7, rwidth=0.85)
-    # plt.grid(axis='y', alpha=0.5)
-    # plt.xlabel('Value')
-    # plt.ylabel('Frequency')
-    # plt.title('Histogram')
-    # plt.show()
+    # # plt.hist(y_train, bins='auto', color='red', alpha=0.7, rwidth=0.85)
+    # # plt.grid(axis='y', alpha=0.5)
+    # # plt.xlabel('Value')
+    # # plt.ylabel('Frequency')
+    # # plt.title('Histogram')
+    # # plt.show()
 
-    # # do Gaussian process regression on extracted features
-    ls_list = [0.1]
-    ns_list = [0.01,0.04,0.07,0.1]
-    # ls = np.full((10,), 1e-1) # best length_scale found empirically (only one that converges)
-    ls = 1e-1
-    k = 5 
-    mean_scores = np.zeros((len(ns_list), len(ls_list)))
+    # # # do Gaussian process regression on extracted features
+    # ls_list = [0.1]
+    # ns_list = [0.01,0.04,0.07,0.1]
+    # # ls = np.full((10,), 1e-1) # best length_scale found empirically (only one that converges)
+    # ls = 1e-1
+    # k = 5 
+    # mean_scores = np.zeros((len(ns_list), len(ls_list)))
 
-    for i, ns in enumerate(ns_list):
-        for j, ls in enumerate(ls_list):
-            kernel = RBF(length_scale=ls_list[j]) + WhiteKernel(ns_list[i])
-            # kernel = RBF(length_scale=ls_list[j]) 
-            gpr = GaussianProcessRegressor(kernel=kernel, random_state=0)
-            scores = cross_val_score(gpr, x_train, y_train, cv=k)
-            gpr = gpr.fit(x_train, y_train) 
-            mean_scores[i,j] = scores.mean()
-            print("Got mean score of {} for ns = {} and ls = {}".format(mean_scores[i,j], ns, ls))
+    # for i, ns in enumerate(ns_list):
+    #     for j, ls in enumerate(ls_list):
+    #         kernel = RBF(length_scale=ls_list[j]) + WhiteKernel(ns_list[i])
+    #         # kernel = RBF(length_scale=ls_list[j]) 
+    #         gpr = GaussianProcessRegressor(kernel=kernel, random_state=0)
+    #         scores = cross_val_score(gpr, x_train, y_train, cv=k)
+    #         gpr = gpr.fit(x_train, y_train) 
+    #         mean_scores[i,j] = scores.mean()
+    #         print("Got mean score of {} for ns = {} and ls = {}".format(mean_scores[i,j], ns, ls))
 
-            # plot predictions on test set
-            y_val_pred, std_y_val_pred = gpr.predict(x_val,return_std=True)
-            plt.plot(range(y_val.size), y_val, label="actual y_val", color="blue")
-            plt.plot(range(y_val_pred.size), y_val_pred, label="predicted y_val after", color="red")
-            plt.fill_between(
-                range(y_val.size),
-                y_val_pred - std_y_val_pred,
-                y_val_pred + std_y_val_pred,
-                color="tab:red",
-                alpha=0.2,
-            )
-            plt.title("Mean score = {} for ns {} and ls {}".format(mean_scores[i,j],ns,ls))
-            plt.xlabel('Index')
-            plt.ylabel('y_val')
-            plt.legend()
-            plt.show()
+    #         # plot predictions on test set
+    #         y_val_pred, std_y_val_pred = gpr.predict(x_val,return_std=True)
+    #         plt.plot(range(y_val.size), y_val, label="actual y_val", color="blue")
+    #         plt.plot(range(y_val_pred.size), y_val_pred, label="predicted y_val after", color="red")
+    #         plt.fill_between(
+    #             range(y_val.size),
+    #             y_val_pred - std_y_val_pred,
+    #             y_val_pred + std_y_val_pred,
+    #             color="tab:red",
+    #             alpha=0.2,
+    #         )
+    #         plt.title("Mean score = {} for ns {} and ls {}".format(mean_scores[i,j],ns,ls))
+    #         plt.xlabel('Index')
+    #         plt.ylabel('y_val')
+    #         plt.legend()
+    #         plt.show()
 
-            # plot predictions on train set
-            y_train_pred, std_y_train_pred = gpr.predict(x_train,return_std=True)
-            plt.plot(range(y_train.size), y_train, label="actual y_train", color="blue")
-            plt.plot(range(y_train_pred.size), y_train_pred, label="predicted y_train", color="red")
-            plt.fill_between(
-                range(y_train.size),
-                y_train_pred - std_y_train_pred,
-                y_train_pred + std_y_train_pred,
-                color="tab:red",
-                alpha=0.2,
-            )
-            plt.title("Mean score = {} for ns {} and ls {}".format(mean_scores[i,j],ns,ls))
-            plt.xlabel('Index')
-            plt.ylabel('y_train')
-            plt.legend()
-            plt.show()
+    #         # plot predictions on train set
+    #         y_train_pred, std_y_train_pred = gpr.predict(x_train,return_std=True)
+    #         plt.plot(range(y_train.size), y_train, label="actual y_train", color="blue")
+    #         plt.plot(range(y_train_pred.size), y_train_pred, label="predicted y_train", color="red")
+    #         plt.fill_between(
+    #             range(y_train.size),
+    #             y_train_pred - std_y_train_pred,
+    #             y_train_pred + std_y_train_pred,
+    #             color="tab:red",
+    #             alpha=0.2,
+    #         )
+    #         plt.title("Mean score = {} for ns {} and ls {}".format(mean_scores[i,j],ns,ls))
+    #         plt.xlabel('Index')
+    #         plt.ylabel('y_train')
+    #         plt.legend()
+    #         plt.show()
 
-    # best_ns = noise_list[mean_scores.index(max(mean_scores))]
-    # best_ns = ls_list[mean_scores.index(max(mean_scores))]
-    best_ns_idx, best_ls_idx = np.unravel_index(np.argmax(mean_scores, axis=None), mean_scores.shape)
-    best_ns = ns_list[best_ns_idx]
-    best_ls = ls_list[best_ls_idx]
+    # # best_ns = noise_list[mean_scores.index(max(mean_scores))]
+    # # best_ns = ls_list[mean_scores.index(max(mean_scores))]
+    # best_ns_idx, best_ls_idx = np.unravel_index(np.argmax(mean_scores, axis=None), mean_scores.shape)
+    # best_ns = ns_list[best_ns_idx]
+    # best_ls = ls_list[best_ls_idx]
 
-    print("best_ns, best_ls = {}, {}".format(best_ns, best_ls))
+    # print("best_ns, best_ls = {}, {}".format(best_ns, best_ls))
 
-    # gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls) + WhiteKernel(best_ns), random_state=0).fit(x_train, y_train)
-    gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls)).fit(x_train, y_train)
-    y_pred_scaled = gpr.predict(x_test)
-    # need to rescale since the Gaussian regressor was trained on standardized output (zero mean, unit variance)
-    rows, _ = x_test.shape
-    y_pred = output_scaler.inverse_transform(y_pred_scaled.reshape((rows,1))) 
-    y_pred = y_pred.reshape(y_pred_scaled.shape)
+    # # gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls) + WhiteKernel(best_ns), random_state=0).fit(x_train, y_train)
+    # gpr = GaussianProcessRegressor(kernel=RBF(length_scale=best_ls)).fit(x_train, y_train)
+    # y_pred_scaled = gpr.predict(x_test)
+    # # need to rescale since the Gaussian regressor was trained on standardized output (zero mean, unit variance)
+    # rows, _ = x_test.shape
+    # y_pred = output_scaler.inverse_transform(y_pred_scaled.reshape((rows,1))) 
+    # y_pred = y_pred.reshape(y_pred_scaled.shape)
 
     print("-- saving the data --")
 
